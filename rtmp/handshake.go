@@ -22,34 +22,31 @@
 package rtmp
 
 import (
+	"io"
 	"net"
-	"fmt"
 )
 
-func SimpleHandshake(conn *net.TCPConn) (err error) {
+func (r *RtmpProtocol) SimpleHandshake() (err error) {
+	var conn *net.TCPConn = r.conn
+
 	c0c1 := make([]byte, 1537)
-	// TODO: FIXME: read in block mode.
-	nsize, err := conn.Read(c0c1)
+	_, err = io.ReadFull(conn, c0c1)
 	if err != nil {
 		return
 	}
-	fmt.Println("read c0c1, size=", nsize)
 
 	s0s1s2 := make([]byte, 3073)
 	copy(s0s1s2[0:1537], c0c1)
-	// TODO: FIXME: write in block mode.
-	nsize, err = conn.Write(s0s1s2)
+	_, err = conn.Write(s0s1s2)
 	if err != nil {
 		return
 	}
-	fmt.Println("write s0s1s2, size=", nsize)
 
 	c2 := make([]byte, 1536)
-	nsize, err = conn.Read(c2)
+	_, err = io.ReadFull(conn, c2)
 	if err != nil {
 		return
 	}
-	fmt.Println("read c2, size=", nsize)
 
 	return
 }

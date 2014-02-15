@@ -23,17 +23,15 @@ package rtmp
 
 import (
 	"io"
-	"net"
 	"math/rand"
 )
 
 func (r *RtmpProtocol) handshake_read_c0c1() (err error) {
-	var conn *net.TCPConn = r.conn
 	var handshake *RtmpHandshake = r.handshake
 
 	if handshake.c0c1 == nil {
 		handshake.c0c1 = make([]byte, 1537)
-		if _, err = io.ReadFull(conn, handshake.c0c1); err != nil {
+		if _, err = io.ReadFull(r.conn, handshake.c0c1); err != nil {
 			return
 		}
 	}
@@ -50,12 +48,11 @@ func (r *RtmpProtocol) handshake_make_s0s1s2() (err error) {
 	return
 }
 func (r *RtmpProtocol) handshake_read_c2() (err error) {
-	var conn *net.TCPConn = r.conn
 	var handshake *RtmpHandshake = r.handshake
 
 	if handshake.c2 == nil {
 		handshake.c2 = make([]byte, 1536)
-		if _, err = io.ReadFull(conn, handshake.c2); err != nil {
+		if _, err = io.ReadFull(r.conn, handshake.c2); err != nil {
 			return
 		}
 	}
@@ -64,7 +61,6 @@ func (r *RtmpProtocol) handshake_read_c2() (err error) {
 }
 
 func (r *RtmpProtocol) SimpleHandshake() (err error) {
-	var conn *net.TCPConn = r.conn
 	var handshake *RtmpHandshake = r.handshake
 
 	// read the c0c1 from connection if not read yet
@@ -91,7 +87,7 @@ func (r *RtmpProtocol) SimpleHandshake() (err error) {
 	handshake.s0s1s2[0] = 0x03
 
 	// for simple handshake, directly write the s0s1s2
-	if _, err = conn.Write(handshake.s0s1s2); err != nil {
+	if _, err = r.conn.Write(handshake.s0s1s2); err != nil {
 		return
 	}
 

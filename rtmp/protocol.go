@@ -22,8 +22,17 @@
 package rtmp
 
 import (
-	"fmt"
+	"math"
 )
+
+// should ack the read, ack to peer
+func (r *RtmpAckWindowSize) ShouldAckRead(n uint64) (bool) {
+	if r.ack_window_size <= 0 {
+		return false
+	}
+
+	return n - uint64(r.acked_size) > uint64(r.ack_window_size)
+}
 
 /**
 * recv a message with raw/undecoded payload from peer.
@@ -31,28 +40,68 @@ import (
 * specifies message.
 */
 func (r *RtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
-	format, cid, bh_size, err := r.read_basic_header()
+	for {
+		if msg, err = r.recv_interlaced_message(); err != nil {
+			return
+		}
+
+		if msg == nil {
+			continue
+		}
+
+		if msg.ReceivedPayloadLength <= 0 || msg.Header.PayloadLength <= 0 {
+			continue
+		}
+
+		if err = r.on_recv_message(msg); err != nil {
+			return
+		}
+
+		break
+	}
+	return
+}
+
+func (r *RtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
+	// acknowledgement
+	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes) {
+		return r.response_acknowledgement_message()
+	}
+
+	// TODO: FIXME: implements it
+
+	return
+}
+
+func (r *RtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
+	// chunk stream basic header.
+	format, cid, _, err := r.read_basic_header()
 	if err != nil {
 		return
 	}
 
+	// get the cached chunk stream.
 	chunk, ok := r.chunkStreams[cid]
 	if !ok {
 		chunk = NewRtmpChunkStream(cid)
 		r.chunkStreams[cid] = chunk
 	}
 
-	mh_size, err := r.read_message_header(chunk, format)
-	if err != nil {
+	// chunk stream message header
+	if _, err = r.read_message_header(chunk, format); err != nil {
 		return
 	}
 
-	fmt.Printf("bh=%v, mh=%v\n", bh_size, mh_size)
+	// read msg payload from chunk stream.
+	if msg, err = r.read_message_payload(chunk); err != nil {
+		return
+	}
+
 	return
 }
 
 func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
-	if err = r.buffer.ensure_buffer_bytes(1); err != nil {
+	if err = r.buffer.EnsureBufferBytes(1); err != nil {
 		return
 	}
 
@@ -62,14 +111,14 @@ func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, e
 	bh_size = 1
 
 	if cid == 0 {
-		if err = r.buffer.ensure_buffer_bytes(1); err != nil {
+		if err = r.buffer.EnsureBufferBytes(1); err != nil {
 			return
 		}
 		cid = 64
 		cid += int(r.buffer.ReadByte())
 		bh_size = 2
 	} else if cid == 1 {
-		if err = r.buffer.ensure_buffer_bytes(2); err != nil {
+		if err = r.buffer.EnsureBufferBytes(2); err != nil {
 			return
 		}
 
@@ -132,7 +181,7 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 	// read message header from socket to buffer.
 	mh_sizes := []int{11, 7, 3, 0}
 	mh_size = mh_sizes[int(format)];
-	if err = r.buffer.ensure_buffer_bytes(mh_size); err != nil {
+	if err = r.buffer.EnsureBufferBytes(mh_size); err != nil {
 		return
 	}
 
@@ -190,7 +239,7 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 			chunk.Header.PayloadLength = r.buffer.ReadUInt24()
 
 			// if msg exists in cache, the size must not changed.
-			if chunk.Msg.payload != nil && len(chunk.Msg.payload) != int(chunk.Header.PayloadLength) {
+			if chunk.Msg.Payload != nil && len(chunk.Msg.Payload) != int(chunk.Header.PayloadLength) {
 				err = RtmpError{code:ERROR_RTMP_PACKET_SIZE, desc:"cached message size should never change"}
 				return
 			}
@@ -210,7 +259,7 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 	if chunk.ExtendedTimestamp {
 		mh_size += 4
-		if err = r.buffer.ensure_buffer_bytes(4); err != nil {
+		if err = r.buffer.EnsureBufferBytes(4); err != nil {
 			return
 		}
 
@@ -241,5 +290,44 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 	// increase the msg count, the chunk stream can accept fmt=1/2/3 message now.
 	chunk.MsgCount++
 
+	return
+}
+
+func (r *RtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMessage, err error) {
+	// empty message
+	if int32(chunk.Header.PayloadLength) <= 0 {
+		msg = chunk.Msg
+		chunk.Msg = nil
+		return
+	}
+
+	// the chunk payload size.
+	payload_size := int(chunk.Header.PayloadLength) - chunk.Msg.ReceivedPayloadLength
+	payload_size = int(math.Min(float64(payload_size), float64(r.inChunkSize)))
+
+	// create msg payload if not initialized
+	if chunk.Msg.Payload == nil {
+		chunk.Msg.Payload = make([]byte, chunk.Msg.Header.PayloadLength)
+	}
+
+	// read payload to buffer
+	if err = r.buffer.EnsureBufferBytes(payload_size); err != nil {
+		return
+	}
+	r.buffer.Read(chunk.Msg.Payload[chunk.Msg.ReceivedPayloadLength:chunk.Msg.ReceivedPayloadLength+payload_size])
+	chunk.Msg.ReceivedPayloadLength += payload_size
+
+	// got entire RTMP message?
+	if chunk.Msg.ReceivedPayloadLength == len(chunk.Msg.Payload) {
+		msg = chunk.Msg
+		chunk.Msg = nil
+		return
+	}
+
+	return
+}
+
+func (r *RtmpProtocol) response_acknowledgement_message() (err error) {
+	// TODO: FIXME: implements it
 	return
 }

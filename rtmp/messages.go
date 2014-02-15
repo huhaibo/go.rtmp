@@ -86,7 +86,12 @@ type RtmpMessage struct {
 	* or compressed video data. The payload format and interpretation are
 	* beyond the scope of this document.
 	*/
-	payload []byte
+	Payload []byte
+	/**
+	* the payload is received from connection,
+	* when len(Payload) == ReceivedPayloadLength, message receive completed.
+	 */
+	ReceivedPayloadLength int
 }
 
 /**
@@ -140,6 +145,11 @@ type RtmpHandshake struct {
 	c2 []byte // 1536B
 }
 
+type RtmpAckWindowSize struct {
+	ack_window_size uint32
+	acked_size uint64
+}
+
 /**
 * the protocol provides the rtmp-message-protocol services,
 * to recv RTMP message from RTMP chunk stream,
@@ -150,12 +160,19 @@ type RtmpProtocol struct {
 	handshake *RtmpHandshake
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
-	conn *net.TCPConn
+	conn *RtmpSocket
+// peer in
+	chunkStreams map[int]*RtmpChunkStream
 	// the bytes read from underlayer tcp connection,
 	// used for parse to RTMP message or packets.
 	buffer *RtmpBuffer
-// peer in
-	chunkStreams map[int]*RtmpChunkStream
+	// input chunk stream chunk size.
+	inChunkSize int32
+	// the acked size
+	inAckSize RtmpAckWindowSize
+// peer out
+	// output chunk stream chunk size.
+	outChunkSize int32
 }
 
 /**
@@ -164,10 +181,13 @@ type RtmpProtocol struct {
 func NewRtmpProtocol(conn *net.TCPConn) (r *RtmpProtocol, err error) {
 	r = new(RtmpProtocol)
 
-	r.conn = conn
+	r.conn = NewRtmpSocket(conn)
 	r.chunkStreams = map[int]*RtmpChunkStream{}
-	r.buffer = NewRtmpBuffer(conn)
+	r.buffer = NewRtmpBuffer(r.conn)
 	r.handshake = new(RtmpHandshake)
+
+	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
+	r.outChunkSize = r.inChunkSize
 
 	rand.Seed(time.Now().UnixNano())
 

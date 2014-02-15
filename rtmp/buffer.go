@@ -23,15 +23,14 @@ package rtmp
 
 import (
 	"bytes"
-	"net"
 	"encoding/binary"
 )
 
 type RtmpBuffer struct {
 	buffer *bytes.Buffer
-	conn *net.TCPConn
+	conn *RtmpSocket
 }
-func NewRtmpBuffer(conn *net.TCPConn) (buffer *RtmpBuffer) {
+func NewRtmpBuffer(conn *RtmpSocket) (buffer *RtmpBuffer) {
 	buffer = new(RtmpBuffer)
 	buffer.conn = conn
 	buffer.buffer = new(bytes.Buffer)
@@ -43,7 +42,7 @@ const RTMP_SOCKET_READ_SIZE = 4096
 /**
 * ensure the buffer contains n bytes, append from connection if needed.
  */
-func (r *RtmpBuffer) ensure_buffer_bytes(n int) (err error) {
+func (r *RtmpBuffer) EnsureBufferBytes(n int) (err error) {
 	var buffer *bytes.Buffer = r.buffer
 
 	for buffer.Len() < n {
@@ -74,6 +73,16 @@ func (r *RtmpBuffer) Len() (int) {
 // The slice is only valid until the next call to a read or write method.
 func (r *RtmpBuffer) Next(n int) ([]byte){
 	return r.buffer.Next(n)
+}
+
+// Read reads the next len(p) bytes from the buffer or until the buffer
+// is drained.
+func (r *RtmpBuffer) Read(p []byte) (v []byte) {
+	if _, err := r.buffer.Read(p); err != nil {
+		panic(err)
+	}
+
+	return p
 }
 
 // ReadByte reads and returns the next byte from the buffer.

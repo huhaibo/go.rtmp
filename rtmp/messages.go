@@ -23,6 +23,8 @@ package rtmp
 
 import (
 	"net"
+	"math/rand"
+	"time"
 )
 
 /**
@@ -31,6 +33,35 @@ import (
 * @see: RTMP 4.1. Message Header
 */
 type RtmpMessageHeader struct {
+	/**
+	* One byte field to represent the message type. A range of type IDs
+	* (1-7) are reserved for protocol control messages.
+	*/
+	MessageType byte
+	/**
+	* Three-byte field that represents the size of the payload in bytes.
+	* It is set in big-endian format.
+	*/
+	PayloadLength uint32
+	/**
+	* Three-byte field that contains a timestamp delta of the message.
+	* The 3 bytes are packed in the big-endian order.
+	* @remark, only used for decoding message from chunk stream.
+	*/
+	TimestampDelta uint32
+	/**
+	* Four-byte field that identifies the stream of the message. These
+	* bytes are set in little-endian format.
+	*/
+	StreamId uint32
+
+	/**
+	* Four-byte field that contains a timestamp of the message.
+	* The 4 bytes are packed in the big-endian order.
+	* @remark, used as calc timestamp when decode and encode time.
+	* @remark, we use 64bits for large time for jitter detect and hls.
+	*/
+	Timestamp uint64
 }
 
 /**
@@ -46,6 +77,16 @@ type RtmpPacket struct {
 * the header is RtmpMessageHeader, where the payload canbe decoded by RtmpPacket.
 */
 type RtmpMessage struct {
+	// 4.1. Message Header
+	Header *RtmpMessageHeader
+	// 4.2. Message Payload
+	/**
+	* The other part which is the payload is the actual data that is
+	* contained in the message. For example, it could be some audio samples
+	* or compressed video data. The payload format and interpretation are
+	* beyond the scope of this document.
+	*/
+	payload []byte
 }
 
 /**
@@ -80,6 +121,24 @@ type RtmpChunkStream struct {
 	*/
 	MsgCount int64
 }
+func NewRtmpChunkStream(cid int) (r *RtmpChunkStream) {
+	r = new(RtmpChunkStream)
+
+	r.CId = cid
+	r.Header = new(RtmpMessageHeader)
+
+	return
+}
+
+/**
+* the handshake data, 6146B = 6KB,
+* store in the protocol and never delete it for every connection.
+ */
+type RtmpHandshake struct {
+	c0c1 []byte // 1537B
+	s0s1s2 []byte // 3073B
+	c2 []byte // 1536B
+}
 
 /**
 * the protocol provides the rtmp-message-protocol services,
@@ -87,9 +146,30 @@ type RtmpChunkStream struct {
 * and to send out RTMP message over RTMP chunk stream.
 */
 type RtmpProtocol struct {
+// handshake
+	handshake *RtmpHandshake
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
 	conn *net.TCPConn
+	// the bytes read from underlayer tcp connection,
+	// used for parse to RTMP message or packets.
+	buffer *RtmpBuffer
 // peer in
 	chunkStreams map[int]*RtmpChunkStream
+}
+
+/**
+* create the rtmp protocol.
+ */
+func NewRtmpProtocol(conn *net.TCPConn) (r *RtmpProtocol, err error) {
+	r = new(RtmpProtocol)
+
+	r.conn = conn
+	r.chunkStreams = map[int]*RtmpChunkStream{}
+	r.buffer = NewRtmpBuffer(conn)
+	r.handshake = new(RtmpHandshake)
+
+	rand.Seed(time.Now().UnixNano())
+
+	return
 }

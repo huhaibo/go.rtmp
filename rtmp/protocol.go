@@ -23,15 +23,7 @@ package rtmp
 
 import (
 	"fmt"
-	"net"
 )
-
-func (r *RtmpProtocol) Initialize(conn *net.TCPConn) (err error) {
-	r.conn = conn
-	r.chunkStreams = map[int]*RtmpChunkStream{}
-
-	return
-}
 
 /**
 * recv a message with raw/undecoded payload from peer.
@@ -46,20 +38,51 @@ func (r *RtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 
 	chunk, ok := r.chunkStreams[cid]
 	if !ok {
-		chunk = &RtmpChunkStream{CId:cid}
+		chunk = NewRtmpChunkStream(cid)
 		r.chunkStreams[cid] = chunk
 	}
 
-	mh_size, err := r.read_message_header(chunk, format, bh_size)
+	mh_size, err := r.read_message_header(chunk, format)
 	if err != nil {
 		return
 	}
 
-	fmt.Println(mh_size)
+	fmt.Printf("bh=%v, mh=%v\n", bh_size, mh_size)
 	return
 }
 
-func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte, bh_size int) (mh_size int, err error) {
+func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
+	if err = r.buffer.ensure_buffer_bytes(1); err != nil {
+		return
+	}
+
+	format = r.buffer.ReadByte()
+	cid = int(format) & 0x3f
+	format = (format >> 6) & 0x03
+	bh_size = 1
+
+	if cid == 0 {
+		if err = r.buffer.ensure_buffer_bytes(1); err != nil {
+			return
+		}
+		cid = 64
+		cid += int(r.buffer.ReadByte())
+		bh_size = 2
+	} else if cid == 1 {
+		if err = r.buffer.ensure_buffer_bytes(2); err != nil {
+			return
+		}
+
+		cid = 64
+		cid += int(r.buffer.ReadByte())
+		cid += int(r.buffer.ReadByte()) * 256
+		bh_size = 3
+	}
+
+	return
+}
+
+func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) (mh_size int, err error) {
 	/**
 	* we should not assert anything about fmt, for the first packet.
 	* (when first packet, the chunk->msg is NULL).
@@ -106,43 +129,117 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte, 
 		chunk.Msg = new(RtmpMessage)
 	}
 
-	if is_fresh_packet {
-	}
-
-	return
-}
-
-func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
-	buf := make([]byte, 1)
-	_, err = r.conn.Read(buf)
-	if err != nil {
+	// read message header from socket to buffer.
+	mh_sizes := []int{11, 7, 3, 0}
+	mh_size = mh_sizes[int(format)];
+	if err = r.buffer.ensure_buffer_bytes(mh_size); err != nil {
 		return
 	}
 
-	format = buf[0]
-	cid = int(format) & 0x3f
-	format = (format >> 6) & 0x03
-	bh_size = 1
+	// parse the message header.
+	// see also: ngx_rtmp_recv
+	if format <= RTMP_FMT_TYPE2 {
+		chunk.Header.TimestampDelta = r.buffer.ReadUInt24()
 
-	if cid == 0 {
-		_, err = r.conn.Read(buf)
-		if err != nil {
-			return
+		// fmt: 0
+		// timestamp: 3 bytes
+		// If the timestamp is greater than or equal to 16777215
+		// (hexadecimal 0x00ffffff), this value MUST be 16777215, and the
+		// ‘extended timestamp header’ MUST be present. Otherwise, this value
+		// SHOULD be the entire timestamp.
+		//
+		// fmt: 1 or 2
+		// timestamp delta: 3 bytes
+		// If the delta is greater than or equal to 16777215 (hexadecimal
+		// 0x00ffffff), this value MUST be 16777215, and the ‘extended
+		// timestamp header’ MUST be present. Otherwise, this value SHOULD be
+		// the entire delta.
+		if chunk.ExtendedTimestamp = false; chunk.Header.TimestampDelta >= RTMP_EXTENDED_TIMESTAMP {
+			chunk.ExtendedTimestamp = true
 		}
-		cid = 64
-		cid += int(buf[0])
-		bh_size = 2
-	} else if cid == 1 {
-		buf = make([]byte, 2)
-		_, err = r.conn.Read(buf)
-		if err != nil {
-			return
+		if chunk.ExtendedTimestamp {
+			// Extended timestamp: 0 or 4 bytes
+			// This field MUST be sent when the normal timsestamp is set to
+			// 0xffffff, it MUST NOT be sent if the normal timestamp is set to
+			// anything else. So for values less than 0xffffff the normal
+			// timestamp field SHOULD be used in which case the extended timestamp
+			// MUST NOT be present. For values greater than or equal to 0xffffff
+			// the normal timestamp field MUST NOT be used and MUST be set to
+			// 0xffffff and the extended timestamp MUST be sent.
+			//
+			// if extended timestamp, the timestamp must >= RTMP_EXTENDED_TIMESTAMP
+			// we set the timestamp to RTMP_EXTENDED_TIMESTAMP to identify we
+			// got an extended timestamp.
+			chunk.Header.Timestamp = RTMP_EXTENDED_TIMESTAMP
+		} else {
+			if format == RTMP_FMT_TYPE0 {
+				// 6.1.2.1. Type 0
+				// For a type-0 chunk, the absolute timestamp of the message is sent
+				// here.
+				chunk.Header.Timestamp = uint64(chunk.Header.TimestampDelta)
+			} else {
+				// 6.1.2.2. Type 1
+				// 6.1.2.3. Type 2
+				// For a type-1 or type-2 chunk, the difference between the previous
+				// chunk's timestamp and the current chunk's timestamp is sent here.
+				chunk.Header.Timestamp += uint64(chunk.Header.TimestampDelta)
+			}
 		}
-		cid = 64
-		cid += int(buf[0])
-		cid += int(buf[1]) * 256
-		bh_size = 3
+
+		if format <= RTMP_FMT_TYPE1 {
+			chunk.Header.PayloadLength = r.buffer.ReadUInt24()
+
+			// if msg exists in cache, the size must not changed.
+			if chunk.Msg.payload != nil && len(chunk.Msg.payload) != int(chunk.Header.PayloadLength) {
+				err = RtmpError{code:ERROR_RTMP_PACKET_SIZE, desc:"cached message size should never change"}
+				return
+			}
+
+			chunk.Header.MessageType = r.buffer.ReadByte()
+
+			if format == RTMP_FMT_TYPE0 {
+				chunk.Header.StreamId = r.buffer.ReadUInt32Le()
+			}
+		}
+	} else {
+		// update the timestamp even fmt=3 for first stream
+		if is_fresh_packet && !chunk.ExtendedTimestamp {
+			chunk.Header.Timestamp += uint64(chunk.Header.TimestampDelta)
+		}
 	}
+
+	if chunk.ExtendedTimestamp {
+		mh_size += 4
+		if err = r.buffer.ensure_buffer_bytes(4); err != nil {
+			return
+		}
+
+		// ffmpeg/librtmp may donot send this filed, need to detect the value.
+		// @see also: http://blog.csdn.net/win_lin/article/details/13363699
+		timestamp := r.buffer.ReadUInt32()
+
+		// compare to the chunk timestamp, which is set by chunk message header
+		// type 0,1 or 2.
+		if chunk.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP && chunk.Header.Timestamp != uint64(timestamp) {
+			mh_size -= 4
+			r.buffer.Next(-4)
+		} else {
+			chunk.Header.Timestamp = uint64(timestamp)
+		}
+	}
+
+	// valid message
+	if int32(chunk.Header.PayloadLength) < 0 {
+		err = RtmpError{code:ERROR_RTMP_MSG_INVLIAD_SIZE, desc:"chunk packet should never be negative"}
+		return
+	}
+
+	// copy header to msg
+	copy := *chunk.Header
+	chunk.Msg.Header = &copy
+
+	// increase the msg count, the chunk stream can accept fmt=1/2/3 message now.
+	chunk.MsgCount++
 
 	return
 }

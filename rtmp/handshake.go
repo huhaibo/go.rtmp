@@ -24,27 +24,79 @@ package rtmp
 import (
 	"io"
 	"net"
+	"math/rand"
 )
+
+func (r *RtmpProtocol) handshake_read_c0c1() (err error) {
+	var conn *net.TCPConn = r.conn
+	var handshake *RtmpHandshake = r.handshake
+
+	if handshake.c0c1 == nil {
+		handshake.c0c1 = make([]byte, 1537)
+		if _, err = io.ReadFull(conn, handshake.c0c1); err != nil {
+			return
+		}
+	}
+
+	return
+}
+func (r *RtmpProtocol) handshake_make_s0s1s2() (err error) {
+	var handshake *RtmpHandshake = r.handshake
+
+	if handshake.s0s1s2 == nil {
+		handshake.s0s1s2 = make([]byte, 3073)
+	}
+
+	return
+}
+func (r *RtmpProtocol) handshake_read_c2() (err error) {
+	var conn *net.TCPConn = r.conn
+	var handshake *RtmpHandshake = r.handshake
+
+	if handshake.c2 == nil {
+		handshake.c2 = make([]byte, 1536)
+		if _, err = io.ReadFull(conn, handshake.c2); err != nil {
+			return
+		}
+	}
+
+	return
+}
 
 func (r *RtmpProtocol) SimpleHandshake() (err error) {
 	var conn *net.TCPConn = r.conn
+	var handshake *RtmpHandshake = r.handshake
 
-	c0c1 := make([]byte, 1537)
-	_, err = io.ReadFull(conn, c0c1)
-	if err != nil {
+	// read the c0c1 from connection if not read yet
+	if err = r.handshake_read_c0c1(); err != nil {
 		return
 	}
 
-	s0s1s2 := make([]byte, 3073)
-	copy(s0s1s2[0:1537], c0c1)
-	_, err = conn.Write(s0s1s2)
-	if err != nil {
+	// plain text required.
+	if handshake.c0c1[0] != 0x03 {
+		err = RtmpError{code:ERROR_RTMP_PLAIN_REQUIRED, desc:"only support rtmp plain text"}
 		return
 	}
 
-	c2 := make([]byte, 1536)
-	_, err = io.ReadFull(conn, c2)
-	if err != nil {
+	// genereate the s0s1s2, alloc the bytes
+	if err = r.handshake_make_s0s1s2(); err != nil {
+		return
+	}
+
+	// for simple handshake, fill the s0s1s2 with random data
+	for i, _ := range handshake.s0s1s2 {
+		handshake.s0s1s2[i] = byte(rand.Int())
+	}
+	// plain text required.
+	handshake.s0s1s2[0] = 0x03
+
+	// for simple handshake, directly write the s0s1s2
+	if _, err = conn.Write(handshake.s0s1s2); err != nil {
+		return
+	}
+
+	// read the c2 from connection if not read yet
+	if err = r.handshake_read_c2(); err != nil {
 		return
 	}
 

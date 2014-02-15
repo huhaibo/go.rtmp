@@ -63,5 +63,32 @@ const RTMP_FMT_TYPE2 = 2
 // follows a Type 0 chunk, then timestamp delta for this Type 3 chunk is
 // the same as the timestamp of Type 0 chunk.
 const RTMP_FMT_TYPE3 = 3
-// the array b
-//var RTMP_CHUNK_HEADER_SIZES []byte = [...]byte{11, 7, 3, 0}
+
+/****************************************************************************
+*****************************************************************************
+****************************************************************************/
+/**
+* 6. Chunking
+* The chunk size is configurable. It can be set using a control
+* message(Set Chunk Size) as described in section 7.1. The maximum
+* chunk size can be 65536 bytes and minimum 128 bytes. Larger values
+* reduce CPU usage, but also commit to larger writes that can delay
+* other content on lower bandwidth connections. Smaller chunks are not
+* good for high-bit rate streaming. Chunk size is maintained
+* independently for each direction.
+*/
+const RTMP_DEFAULT_CHUNK_SIZE = 128
+const RTMP_MIN_CHUNK_SIZE = 2
+
+/**
+* 6.1. Chunk Format
+* Extended timestamp: 0 or 4 bytes
+* This field MUST be sent when the normal timsestamp is set to
+* 0xffffff, it MUST NOT be sent if the normal timestamp is set to
+* anything else. So for values less than 0xffffff the normal
+* timestamp field SHOULD be used in which case the extended timestamp
+* MUST NOT be present. For values greater than or equal to 0xffffff
+* the normal timestamp field MUST NOT be used and MUST be set to
+* 0xffffff and the extended timestamp MUST be sent.
+*/
+const RTMP_EXTENDED_TIMESTAMP = 0xFFFFFF

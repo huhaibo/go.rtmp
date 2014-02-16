@@ -86,7 +86,6 @@ func (r *amf0Codec) ReadUtf8() (v string, err error) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 len requires 2bytes"}
 		return
 	}
-
 	len := r.stream.ReadUInt16()
 
 	// empty string
@@ -99,8 +98,18 @@ func (r *amf0Codec) ReadUtf8() (v string, err error) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 data requires more bytes"}
 		return
 	}
+	v = r.stream.ReadString(int(len))
 
-	// TODO: FIXME: implements it
+	// support utf8-1 only
+	// 1.3.1 Strings and UTF-8
+	// UTF8-1 = %x00-7F
+	for _, ch := range v {
+		if (ch & 0x80) != 0 {
+			// ignored. only support utf8-1, 0x00-0x7F
+			//err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"only support utf8-1, 0x00-0x7F"}
+			//return
+		}
+	}
 
 	return
 }

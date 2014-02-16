@@ -35,6 +35,7 @@ type RtmpBytesCodec interface {
 	ReadUInt32() (v uint32)
 	ReadUInt32Le() (v uint32)
 	TopUInt32() (v uint32)
+	ReadString(n int) (string)
 }
 type RtmpStream interface {
 	RtmpBytesCodec
@@ -136,51 +137,57 @@ func (r* rtmpBytesCodec) ReadByte() (v byte) {
 
 // ReadByte reads and returns the next 3 bytes from the buffer. in big-endian
 func (r* rtmpBytesCodec) ReadUInt24() (v uint32) {
-	buf := make([]byte, 4)
-
-	if _, err := r.buffer.Read(buf[1:]); err != nil {
+	b := make([]byte, 4)
+	if _, err := r.buffer.Read(b[1:]); err != nil {
 		panic(err)
 	}
 
-	return binary.BigEndian.Uint32(buf)
+	return binary.BigEndian.Uint32(b)
 }
 
 func (r* rtmpBytesCodec) ReadUInt16() (v uint16) {
-	buf := make([]byte, 2)
-
-	if _, err := r.buffer.Read(buf); err != nil {
+	b := make([]byte, 2)
+	if _, err := r.buffer.Read(b); err != nil {
 		panic(err)
 	}
 
-	return binary.BigEndian.Uint16(buf)
+	return binary.BigEndian.Uint16(b)
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
 func (r* rtmpBytesCodec) ReadUInt32() (v uint32) {
-	buf := make([]byte, 4)
-
-	if _, err := r.buffer.Read(buf); err != nil {
+	b := make([]byte, 4)
+	if _, err := r.buffer.Read(b); err != nil {
 		panic(err)
 	}
 
-	return binary.BigEndian.Uint32(buf)
+	return binary.BigEndian.Uint32(b)
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in little-endian
 func (r* rtmpBytesCodec) ReadUInt32Le() (v uint32) {
-	buf := make([]byte, 4)
-
-	if _, err := r.buffer.Read(buf); err != nil {
+	b := make([]byte, 4)
+	if _, err := r.buffer.Read(b); err != nil {
 		panic(err)
 	}
 
-	return binary.LittleEndian.Uint32(buf)
+	return binary.LittleEndian.Uint32(b)
 }
 
 // Get the first 4bytes, donot read it. in big-endian
 func (r* rtmpBytesCodec) TopUInt32() (v uint32) {
-	var buf []byte = r.buffer.Bytes()
-	buf = buf[0:4]
+	var b []byte = r.buffer.Bytes()
+	b = b[0:4]
 
-	return binary.BigEndian.Uint32(buf)
+	return binary.BigEndian.Uint32(b)
+}
+
+// read string length specified by n.
+func (r *rtmpBytesCodec) ReadString(n int) (v string) {
+	b := make([]byte, n)
+	if _, err := r.buffer.Read(b); err != nil {
+		panic(err)
+	}
+
+	return string(b)
 }

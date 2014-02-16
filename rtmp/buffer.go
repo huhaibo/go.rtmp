@@ -24,6 +24,7 @@ package rtmp
 import (
 	"bytes"
 	"encoding/binary"
+	"math"
 )
 
 type RtmpBytesCodec interface {
@@ -34,12 +35,15 @@ type RtmpBytesCodec interface {
 	ReadUInt24() (v uint32)
 	ReadUInt32() (v uint32)
 	ReadUInt32Le() (v uint32)
-	TopUInt32() (v uint32)
+	ReadFloat64() (v float64)
 	ReadString(n int) (string)
+	TopByte() (byte)
+	TopUInt32() (v uint32)
 }
 type RtmpStream interface {
 	RtmpBytesCodec
 	Reset(n int)
+	Empty() (bool)
 	Requires(n int) (bool)
 }
 type RtmpBuffer interface {
@@ -99,6 +103,11 @@ func (r *rtmpSocketBuffer) EnsureBufferBytes(n int) (err error) {
 // whether stream can satisfy the requires n bytes.
 func (r *rtmpSocketStream) Requires(n int) (bool) {
 	return r.buffer != nil && r.buffer.Len() >= n
+}
+
+// whether stream is empty
+func (r *rtmpSocketStream) Empty() (bool) {
+	return r.buffer == nil || r.buffer.Len() <= 0
 }
 
 // reset the decode buffer, start from index n
@@ -164,6 +173,19 @@ func (r* rtmpBytesCodec) ReadUInt32() (v uint32) {
 	return binary.BigEndian.Uint32(b)
 }
 
+// ReadByte reads and returns the next 8 bytes from the buffer. in big-endian
+func (r* rtmpBytesCodec) ReadFloat64() (v float64) {
+	b := make([]byte, 8)
+	if _, err := r.buffer.Read(b); err != nil {
+		panic(err)
+	}
+
+	v64 := binary.BigEndian.Uint64(b)
+	v = math.Float64frombits(v64)
+
+	return
+}
+
 // ReadByte reads and returns the next 4 bytes from the buffer. in little-endian
 func (r* rtmpBytesCodec) ReadUInt32Le() (v uint32) {
 	b := make([]byte, 4)
@@ -172,6 +194,12 @@ func (r* rtmpBytesCodec) ReadUInt32Le() (v uint32) {
 	}
 
 	return binary.LittleEndian.Uint32(b)
+}
+
+// Get the first 1bytes, donot read it. in big-endian
+func (r* rtmpBytesCodec) TopByte() (byte) {
+	var b []byte = r.buffer.Bytes()
+	return b[0]
 }
 
 // Get the first 4bytes, donot read it. in big-endian

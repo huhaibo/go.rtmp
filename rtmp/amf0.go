@@ -21,6 +21,8 @@
 
 package rtmp
 
+import "fmt"
+
 // AMF0 marker
 const RTMP_AMF0_Number = 0x00
 const RTMP_AMF0_Boolean = 0x01
@@ -47,23 +49,133 @@ const RTMP_AMF0_OriginStrictArray = 0x20
 // User defined
 const RTMP_AMF0_Invalid = 0x3F
 
+/**
+* 2.5 Object Type
+* anonymous-object-type = object-marker *(object-property)
+* object-property = (UTF-8 value-type) | (UTF-8-empty object-end-marker)
+*/
+// @see: SrsAmf0Object
 type RtmpAmf0Object struct {
+	properties map[string]*RtmpAmf0Any
+}
+func NewRtmpAmf0Object() (*RtmpAmf0Object) {
+	r := &RtmpAmf0Object{}
+	r.properties = make(map[string]*RtmpAmf0Any)
+	return r
 }
 
-type Amf0Codec interface {
-	ReadString() (v string, err error)
+func (r *RtmpAmf0Object) Read(codec RtmpAmf0Codec, s RtmpStream) (err error) {
+	for !s.Empty() {
+		// property-name: utf8 string
+		var property_name string
+		if property_name, err = codec.ReadUtf8(); err != nil {
+			return
+		}
+
+		// property-value: any
+		var property_value RtmpAmf0Any
+		if err = property_value.Read(codec, s); err != nil {
+			return
+		}
+
+		// AMF0 Object EOF.
+		if len(property_name) <= 0 || property_value.IsNil() || property_value.IsObjectEof() {
+			break
+		}
+
+		// add property
+		r.Set(property_name, &property_value)
+	}
+	return
 }
-func NewAmf0Codec(stream RtmpStream) (Amf0Codec) {
-	r := amf0Codec{}
+func (r *RtmpAmf0Object) Set(k string, v *RtmpAmf0Any) {
+	r.properties[k] = v
+}
+
+/**
+* any amf0 value.
+* 2.1 Types Overview
+* value-type = number-type | boolean-type | string-type | object-type
+* 		| null-marker | undefined-marker | reference-type | ecma-array-type
+* 		| strict-array-type | date-type | long-string-type | xml-document-type
+* 		| typed-object-type
+*/
+// @see: SrsAmf0Any
+type RtmpAmf0Any struct {
+	Maker byte
+	Value interface {}
+}
+
+func (r *RtmpAmf0Any) Read(codec RtmpAmf0Codec, s RtmpStream) (err error) {
+	// marker
+	if !s.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
+		return
+	}
+	r.Maker = s.TopByte()
+
+	switch {
+	case r.Maker == RTMP_AMF0_String:
+		r.Value, err = codec.ReadString()
+	case r.Maker == RTMP_AMF0_Boolean:
+		r.Value, err = codec.ReadBoolean()
+	case r.Maker == RTMP_AMF0_Number:
+		r.Value, err = codec.ReadNumber()
+	case r.Maker == RTMP_AMF0_Null || r.Maker == RTMP_AMF0_Undefined || r.Maker == RTMP_AMF0_ObjectEnd:
+		s.Next(1)
+	case r.Maker == RTMP_AMF0_Object:
+		r.Value, err = codec.ReadObject()
+	// TODO: FIXME: implements it.
+	default:
+		err = RtmpError{code:ERROR_RTMP_AMF0_INVALID, desc:fmt.Sprintf("invalid amf0 message type. marker=%#x", r.Maker)}
+	}
+
+	return
+}
+func (r *RtmpAmf0Any) IsNil() (v bool) {
+	return r.Value == nil
+}
+func (r *RtmpAmf0Any) IsObjectEof() (v bool) {
+	return r.Maker == RTMP_AMF0_ObjectEnd
+}
+func (r *RtmpAmf0Any) IsString() (v bool) {
+	return r.Maker == RTMP_AMF0_String
+}
+func (r *RtmpAmf0Any) String() (v string) {
+	return r.Value.(string)
+}
+func (r *RtmpAmf0Any) IsNumber() (v bool) {
+	return r.Maker == RTMP_AMF0_Number
+}
+func (r *RtmpAmf0Any) Number() (v float64) {
+	return r.Value.(float64)
+}
+func (r *RtmpAmf0Any) IsBoolean() (v bool) {
+	return r.Maker == RTMP_AMF0_Boolean
+}
+func (r *RtmpAmf0Any) Boolean() (v bool) {
+	return r.Value.(bool)
+}
+
+type RtmpAmf0Codec interface {
+	ReadString() (v string, err error)
+	ReadBoolean() (v bool, err error)
+	ReadUtf8() (v string, err error)
+	ReadNumber() (v float64, err error)
+	ReadObject() (v *RtmpAmf0Object, err error)
+}
+func NewRtmpAmf0Codec(stream RtmpStream) (RtmpAmf0Codec) {
+	r := rtmpAmf0Codec{}
 	r.stream = stream
 	return &r
 }
-type amf0Codec struct {
+
+type rtmpAmf0Codec struct {
 	stream RtmpStream
 }
 
 // srs_amf0_read_string
-func (r *amf0Codec) ReadString() (v string, err error) {
+func (r *rtmpAmf0Codec) ReadString() (v string, err error) {
 	// marker
 	if !r.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string requires 1bytes marker"}
@@ -80,7 +192,7 @@ func (r *amf0Codec) ReadString() (v string, err error) {
 }
 
 // srs_amf0_read_utf8
-func (r *amf0Codec) ReadUtf8() (v string, err error) {
+func (r *rtmpAmf0Codec) ReadUtf8() (v string, err error) {
 	// len
 	if !r.stream.Requires(2) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 len requires 2bytes"}
@@ -109,6 +221,79 @@ func (r *amf0Codec) ReadUtf8() (v string, err error) {
 			//err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"only support utf8-1, 0x00-0x7F"}
 			//return
 		}
+	}
+
+	return
+}
+
+// srs_amf0_read_number
+func (r *rtmpAmf0Codec) ReadNumber() (v float64, err error) {
+	// marker
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 1bytes marker"}
+		return
+	}
+
+	if marker := r.stream.ReadByte(); marker != RTMP_AMF0_Number{
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number marker invalid"}
+		return
+	}
+
+	// value
+	if !r.stream.Requires(8) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 8bytes value"}
+		return
+	}
+	v = r.stream.ReadFloat64()
+
+	return
+}
+
+// srs_amf0_read_boolean
+func (r *rtmpAmf0Codec) ReadBoolean() (v bool, err error) {
+	// marker
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 1bytes marker"}
+		return
+	}
+
+	if marker := r.stream.ReadByte(); marker != RTMP_AMF0_Boolean{
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool marker invalid"}
+		return
+	}
+
+	// value
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 8bytes value"}
+		return
+	}
+
+	if r.stream.ReadByte() == 0 {
+		v = false
+	} else {
+		v = true
+	}
+
+	return
+}
+
+// srs_amf0_read_object
+func (r *rtmpAmf0Codec) ReadObject() (v *RtmpAmf0Object, err error) {
+	// marker
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object requires 1bytes marker"}
+		return
+	}
+
+	if marker := r.stream.ReadByte(); marker != RTMP_AMF0_Object{
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object marker invalid"}
+		return
+	}
+
+	// value
+	v = NewRtmpAmf0Object()
+	if err = v.Read(r, r.stream); err != nil {
+		return
 	}
 
 	return

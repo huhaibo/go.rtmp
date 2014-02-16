@@ -222,7 +222,7 @@ func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) 
 			stream.Next(1)
 		}
 
-		amf0_codec := NewAmf0Codec(stream)
+		amf0_codec := NewRtmpAmf0Codec(stream)
 
 		// amf0 command message.
 		// need to read the command name.
@@ -268,5 +268,31 @@ type RtmpConnectAppPacket struct {
 	CommandObject *RtmpAmf0Object
 }
 func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
+	codec := NewRtmpAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName != RTMP_AMF0_COMMAND_CONNECT {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_name failed."}
+		return
+	}
+
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if r.TransactionId != 1.0 {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect transaction_id failed."}
+		return
+	}
+
+	if r.CommandObject, err = codec.ReadObject(); err != nil {
+		return
+	}
+	if r.CommandObject == nil {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_object failed."}
+		return
+	}
+
 	return
 }

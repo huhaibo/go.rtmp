@@ -21,53 +21,5 @@
 
 package rtmp
 
-import (
-	"net"
-	"io"
-)
-
-// socket to read or write data.
-type RtmpSocket interface {
-	io.ReadWriter
-	RecvBytes() (uint64)
-	SendBytes() (uint64)
-}
-func NewRtmpSocket(conn *net.TCPConn) (RtmpSocket) {
-	r := new(rtmpTCPSocket)
-	r.conn = conn
-	return r
-}
-
-type rtmpTCPSocket struct {
-	conn *net.TCPConn
-	recv_bytes uint64
-	send_bytes uint64
-}
-
-func (r *rtmpTCPSocket) RecvBytes() (uint64) {
-	return r.recv_bytes
-}
-
-func (r *rtmpTCPSocket) SendBytes() (uint64) {
-	return r.send_bytes
-}
-
-func (r *rtmpTCPSocket) Read(b []byte) (n int, err error) {
-	n, err = r.conn.Read(b)
-
-	if n > 0 {
-		r.recv_bytes += uint64(n)
-	}
-
-	return
-}
-
-func (r *rtmpTCPSocket) Write(b []byte) (n int, err error) {
-	n, err = r.conn.Write(b)
-
-	if n > 0 {
-		r.send_bytes += uint64(n)
-	}
-
-	return
+type RtmpAmf0Object struct {
 }

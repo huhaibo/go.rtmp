@@ -154,12 +154,12 @@ type RtmpProtocol struct {
 	handshake *RtmpHandshake
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
-	conn *RtmpSocket
+	conn RtmpSocket
 // peer in
 	chunkStreams map[int]*RtmpChunkStream
 	// the bytes read from underlayer tcp connection,
 	// used for parse to RTMP message or packets.
-	buffer *RtmpBuffer
+	buffer RtmpBuffer
 	// input chunk stream chunk size.
 	inChunkSize int32
 	// the acked size
@@ -206,6 +206,23 @@ type RtmpPacket interface {
 	*/
 	Decode([]byte) (error)
 }
+func ParseRtmpPacket(r *RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
+	if header.IsAmf0Command() {
+	}
 
+	return
+}
+
+/**
+* 4.1.1. connect
+* The client sends the connect command to the server to request
+* connection to a server application instance.
+*/
 type RtmpConnectAppPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *RtmpAmf0Object
+}
+func (r *RtmpConnectAppPacket) Decode(b []byte) (err error) {
+	return
 }

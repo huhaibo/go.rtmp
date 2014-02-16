@@ -23,6 +23,7 @@ package rtmp
 
 import (
 	"math"
+	"reflect"
 )
 
 // should ack the read, ack to peer
@@ -62,9 +63,68 @@ func (r *RtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 	return
 }
 
+/**
+* expect a specified message by v, drop others util got specified one.
+* for example:
+* 		var pkt *RtmpConnectAppPacket
+*		_, err = r.protocol.ExpectMessage(&pkt)
+* 		// use the decoded pkt contains the connect app info.
+*/
+func (r *RtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err error) {
+	rv := reflect.ValueOf(v)
+	rt := reflect.TypeOf(v)
+	if rv.Kind() != reflect.Ptr {
+		err = RtmpError{code:ERROR_GO_REFLECT_PTR_REQUIRES, desc:"param must be ptr for expect message"}
+		return
+	}
+	if rv.IsNil() {
+		err = RtmpError{code:ERROR_GO_REFLECT_NEVER_NIL, desc:"param should never be nil"}
+		return
+	}
+	if rv.Elem().CanSet() {
+		err = RtmpError{code:ERROR_GO_REFLECT_CAN_SET, desc:"param should be settable"}
+		return
+	}
+
+	for {
+		if msg, err = r.RecvMessage(); err != nil {
+			return
+		}
+		if msg == nil || msg.Payload == nil{
+			continue
+		}
+
+		var pkt RtmpPacket
+		if pkt, err = ParseRtmpPacket(r, msg.Header, msg.Payload); err != nil {
+			return
+		}
+		if pkt == nil {
+			continue
+		}
+
+		// check the convertible and convert to the value or ptr value.
+		// for example, the v like the c++ code: Msg**v
+		pkt_rt := reflect.TypeOf(pkt)
+		if pkt_rt.ConvertibleTo(rt) {
+			// directly match, the pkt is like c++: Msg**pkt
+			// set the v by: *v = *pkt
+			rv.Elem().Set(reflect.ValueOf(pkt).Elem())
+			return
+		}
+		if pkt_rt.ConvertibleTo(rt.Elem()) {
+			// ptr match, the pkt is like c++: Msg*pkt
+			// set the v by: *v = pkt
+			rv.Elem().Set(reflect.ValueOf(pkt))
+			return
+		}
+	}
+
+	return
+}
+
 func (r *RtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	// acknowledgement
-	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes) {
+	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes()) {
 		return r.response_acknowledgement_message()
 	}
 
@@ -331,4 +391,8 @@ func (r *RtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMe
 func (r *RtmpProtocol) response_acknowledgement_message() (err error) {
 	// TODO: FIXME: implements it
 	return
+}
+
+func (r *RtmpMessageHeader) IsAmf0Command() (bool) {
+	return r.MessageType == RTMP_MSG_AMF0CommandMessage
 }

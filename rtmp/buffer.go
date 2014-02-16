@@ -26,15 +26,30 @@ import (
 	"encoding/binary"
 )
 
-type RtmpBuffer struct {
-	buffer *bytes.Buffer
-	conn *RtmpSocket
+type RtmpStream interface {
+	Next(n int) ([]byte)
+	Read(p []byte) (v []byte)
+	ReadByte() (v byte)
+	ReadUInt24() (v uint32)
+	ReadUInt32() (v uint32)
+	ReadUInt32Le() (v uint32)
+	TopUInt32() (v uint32)
 }
-func NewRtmpBuffer(conn *RtmpSocket) (buffer *RtmpBuffer) {
-	buffer = new(RtmpBuffer)
+type RtmpBuffer interface {
+	RtmpStream
+	EnsureBufferBytes(n int) (err error)
+}
+func NewRtmpBuffer(conn RtmpSocket) (RtmpBuffer) {
+	buffer := new(rtmpSocketBuffer)
 	buffer.conn = conn
 	buffer.buffer = new(bytes.Buffer)
-	return
+	return buffer
+}
+
+// read data from socket if needed.
+type rtmpSocketBuffer struct{
+	buffer *bytes.Buffer
+	conn RtmpSocket
 }
 
 const RTMP_SOCKET_READ_SIZE = 4096
@@ -42,7 +57,7 @@ const RTMP_SOCKET_READ_SIZE = 4096
 /**
 * ensure the buffer contains n bytes, append from connection if needed.
  */
-func (r *RtmpBuffer) EnsureBufferBytes(n int) (err error) {
+func (r *rtmpSocketBuffer) EnsureBufferBytes(n int) (err error) {
 	var buffer *bytes.Buffer = r.buffer
 
 	for buffer.Len() < n {
@@ -65,13 +80,13 @@ func (r *RtmpBuffer) EnsureBufferBytes(n int) (err error) {
 // advancing the buffer as if the bytes had been returned by Read.
 // If there are fewer than n bytes in the buffer, Next returns the entire buffer.
 // The slice is only valid until the next call to a read or write method.
-func (r *RtmpBuffer) Next(n int) ([]byte){
+func (r *rtmpSocketBuffer) Next(n int) ([]byte){
 	return r.buffer.Next(n)
 }
 
 // Read reads the next len(p) bytes from the buffer or until the buffer
 // is drained.
-func (r *RtmpBuffer) Read(p []byte) (v []byte) {
+func (r *rtmpSocketBuffer) Read(p []byte) (v []byte) {
 	if _, err := r.buffer.Read(p); err != nil {
 		panic(err)
 	}
@@ -80,7 +95,7 @@ func (r *RtmpBuffer) Read(p []byte) (v []byte) {
 }
 
 // ReadByte reads and returns the next byte from the buffer.
-func (r* RtmpBuffer) ReadByte() (v byte) {
+func (r* rtmpSocketBuffer) ReadByte() (v byte) {
 	var err error
 
 	if v, err = r.buffer.ReadByte(); err != nil {
@@ -91,7 +106,7 @@ func (r* RtmpBuffer) ReadByte() (v byte) {
 }
 
 // ReadByte reads and returns the next 3 bytes from the buffer. in big-endian
-func (r* RtmpBuffer) ReadUInt24() (v uint32) {
+func (r* rtmpSocketBuffer) ReadUInt24() (v uint32) {
 	buf := make([]byte, 4)
 
 	if _, err := r.buffer.Read(buf[1:]); err != nil {
@@ -102,7 +117,7 @@ func (r* RtmpBuffer) ReadUInt24() (v uint32) {
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
-func (r* RtmpBuffer) ReadUInt32() (v uint32) {
+func (r* rtmpSocketBuffer) ReadUInt32() (v uint32) {
 	buf := make([]byte, 4)
 
 	if _, err := r.buffer.Read(buf); err != nil {
@@ -113,7 +128,7 @@ func (r* RtmpBuffer) ReadUInt32() (v uint32) {
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in little-endian
-func (r* RtmpBuffer) ReadUInt32Le() (v uint32) {
+func (r* rtmpSocketBuffer) ReadUInt32Le() (v uint32) {
 	buf := make([]byte, 4)
 
 	if _, err := r.buffer.Read(buf); err != nil {
@@ -124,7 +139,7 @@ func (r* RtmpBuffer) ReadUInt32Le() (v uint32) {
 }
 
 // Get the first 4bytes, donot read it. in big-endian
-func (r* RtmpBuffer) TopUInt32() (v uint32) {
+func (r* rtmpSocketBuffer) TopUInt32() (v uint32) {
 	var buf []byte = r.buffer.Bytes()
 	buf = buf[0:4]
 

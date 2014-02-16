@@ -41,10 +41,11 @@ func (r *RtmpServer) Handshake() (err error) {
 }
 
 func (r *RtmpServer) ConnectApp() (err error) {
-	var msg *RtmpMessage
-	if msg, err = r.protocol.RecvMessage(); err != nil {
+	//var msg *RtmpMessage
+	var pkt *RtmpConnectAppPacket
+	if _, err = r.protocol.ExpectMessage(&pkt); err != nil {
 		return
 	}
-	if msg == nil {}
+
 	return
 }

@@ -28,54 +28,11 @@ import (
 )
 
 /**
-* the message header for RtmpMessage,
-* the header can be used in chunk stream cache, for the chunk stream header.
-* @see: RTMP 4.1. Message Header
-*/
-type RtmpMessageHeader struct {
-	/**
-	* One byte field to represent the message type. A range of type IDs
-	* (1-7) are reserved for protocol control messages.
-	*/
-	MessageType byte
-	/**
-	* Three-byte field that represents the size of the payload in bytes.
-	* It is set in big-endian format.
-	*/
-	PayloadLength uint32
-	/**
-	* Three-byte field that contains a timestamp delta of the message.
-	* The 3 bytes are packed in the big-endian order.
-	* @remark, only used for decoding message from chunk stream.
-	*/
-	TimestampDelta uint32
-	/**
-	* Four-byte field that identifies the stream of the message. These
-	* bytes are set in little-endian format.
-	*/
-	StreamId uint32
-
-	/**
-	* Four-byte field that contains a timestamp of the message.
-	* The 4 bytes are packed in the big-endian order.
-	* @remark, used as calc timestamp when decode and encode time.
-	* @remark, we use 64bits for large time for jitter detect and hls.
-	*/
-	Timestamp uint64
-}
-
-/**
-* the payload codec by the RtmpPacket.
-* @see: RTMP 4.2. Message Payload
-*/
-type RtmpPacket struct {
-}
-
-/**
 * the rtmp message, encode/decode to/from the rtmp stream,
 * which contains a message header and a bytes payload.
 * the header is RtmpMessageHeader, where the payload canbe decoded by RtmpPacket.
 */
+// @see: ISrsMessage, SrsCommonMessage, SrsSharedPtrMessage
 type RtmpMessage struct {
 	// 4.1. Message Header
 	Header *RtmpMessageHeader
@@ -136,6 +93,43 @@ func NewRtmpChunkStream(cid int) (r *RtmpChunkStream) {
 }
 
 /**
+* the message header for RtmpMessage,
+* the header can be used in chunk stream cache, for the chunk stream header.
+* @see: RTMP 4.1. Message Header
+*/
+type RtmpMessageHeader struct {
+	/**
+	* One byte field to represent the message type. A range of type IDs
+	* (1-7) are reserved for protocol control messages.
+	*/
+	MessageType byte
+	/**
+	* Three-byte field that represents the size of the payload in bytes.
+	* It is set in big-endian format.
+	*/
+	PayloadLength uint32
+	/**
+	* Three-byte field that contains a timestamp delta of the message.
+	* The 3 bytes are packed in the big-endian order.
+	* @remark, only used for decoding message from chunk stream.
+	*/
+	TimestampDelta uint32
+	/**
+	* Four-byte field that identifies the stream of the message. These
+	* bytes are set in little-endian format.
+	*/
+	StreamId uint32
+
+	/**
+	* Four-byte field that contains a timestamp of the message.
+	* The 4 bytes are packed in the big-endian order.
+	* @remark, used as calc timestamp when decode and encode time.
+	* @remark, we use 64bits for large time for jitter detect and hls.
+	*/
+	Timestamp uint64
+}
+
+/**
 * the handshake data, 6146B = 6KB,
 * store in the protocol and never delete it for every connection.
  */
@@ -191,4 +185,20 @@ func NewRtmpProtocol(conn *net.TCPConn) (r *RtmpProtocol, err error) {
 	rand.Seed(time.Now().UnixNano())
 
 	return
+}
+
+/**
+* the payload codec by the RtmpPacket.
+* @see: RTMP 4.2. Message Payload
+*/
+/**
+* the decoded message payload.
+* @remark we seperate the packet from message,
+*		for the packet focus on logic and domain data,
+*		the message bind to the protocol and focus on protocol, such as header.
+* 		we can merge the message and packet, using OOAD hierachy, packet extends from message,
+* 		it's better for me to use components -- the message use the packet as payload.
+*/
+// @see: SrsPacket
+type RtmpPacket struct {
 }

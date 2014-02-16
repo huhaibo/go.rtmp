@@ -21,5 +21,86 @@
 
 package rtmp
 
+// AMF0 marker
+const RTMP_AMF0_Number = 0x00
+const RTMP_AMF0_Boolean = 0x01
+const RTMP_AMF0_String = 0x02
+const RTMP_AMF0_Object = 0x03
+const RTMP_AMF0_MovieClip = 0x04 // reserved, not supported
+const RTMP_AMF0_Null = 0x05
+const RTMP_AMF0_Undefined = 0x06
+const RTMP_AMF0_Reference = 0x07
+const RTMP_AMF0_EcmaArray = 0x08
+const RTMP_AMF0_ObjectEnd = 0x09
+const RTMP_AMF0_StrictArray = 0x0A
+const RTMP_AMF0_Date = 0x0B
+const RTMP_AMF0_LongString = 0x0C
+const RTMP_AMF0_UnSupported = 0x0D
+const RTMP_AMF0_RecordSet = 0x0E // reserved, not supported
+const RTMP_AMF0_XmlDocument = 0x0F
+const RTMP_AMF0_TypedObject = 0x10
+// AVM+ object is the AMF3 object.
+const RTMP_AMF0_AVMplusObject = 0x11
+// origin array whos data takes the same form as LengthValueBytes
+const RTMP_AMF0_OriginStrictArray = 0x20
+
+// User defined
+const RTMP_AMF0_Invalid = 0x3F
+
 type RtmpAmf0Object struct {
+}
+
+type Amf0Codec interface {
+	ReadString() (v string, err error)
+}
+func NewAmf0Codec(stream RtmpStream) (Amf0Codec) {
+	r := amf0Codec{}
+	r.stream = stream
+	return &r
+}
+type amf0Codec struct {
+	stream RtmpStream
+}
+
+// srs_amf0_read_string
+func (r *amf0Codec) ReadString() (v string, err error) {
+	// marker
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string requires 1bytes marker"}
+		return
+	}
+
+	if marker := r.stream.ReadByte(); marker != RTMP_AMF0_String {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string marker invalid"}
+		return
+	}
+
+	v, err = r.ReadUtf8()
+	return
+}
+
+// srs_amf0_read_utf8
+func (r *amf0Codec) ReadUtf8() (v string, err error) {
+	// len
+	if !r.stream.Requires(2) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 len requires 2bytes"}
+		return
+	}
+
+	len := r.stream.ReadUInt16()
+
+	// empty string
+	if len <= 0 {
+		return
+	}
+
+	// data
+	if !r.stream.Requires(int(len)) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 data requires more bytes"}
+		return
+	}
+
+	// TODO: FIXME: implements it
+
+	return
 }

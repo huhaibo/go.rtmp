@@ -396,3 +396,12 @@ func (r *rtmpProtocol) response_acknowledgement_message() (err error) {
 func (r *RtmpMessageHeader) IsAmf0Command() (bool) {
 	return r.MessageType == RTMP_MSG_AMF0CommandMessage
 }
+func (r *RtmpMessageHeader) IsAmf3Command() (bool) {
+	return r.MessageType == RTMP_MSG_AMF3CommandMessage
+}
+func (r *RtmpMessageHeader) IsAmf0Data() (bool) {
+	return r.MessageType == RTMP_MSG_AMF0DataMessage
+}
+func (r *RtmpMessageHeader) IsAmf3Data() (bool) {
+	return r.MessageType == RTMP_MSG_AMF3DataMessage
+}

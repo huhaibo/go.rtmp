@@ -210,11 +210,48 @@ type RtmpPacket interface {
 	/**
 	* decode functions.
 	*/
-	Decode([]byte) (error)
+	Decode(RtmpStream) (error)
 }
 func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
+	stream := NewRtmpStream(payload)
+
 	// decode specified packet type
-	if header.IsAmf0Command() {
+	if header.IsAmf0Command() || header.IsAmf3Command() || header.IsAmf0Data() || header.IsAmf3Data() {
+		// skip 1bytes to decode the amf3 command.
+		if header.IsAmf3Command() &&  stream.Requires(1) {
+			stream.Next(1)
+		}
+
+		amf0_codec := NewAmf0Codec(stream)
+
+		// amf0 command message.
+		// need to read the command name.
+		var command string
+		if command, err = amf0_codec.ReadString(); err != nil {
+			return
+		}
+
+		// result/error packet
+		if command == RTMP_AMF0_COMMAND_RESULT || command == RTMP_AMF0_COMMAND_ERROR {
+			// TODO: FIXME: implements it
+		}
+
+		// reset to zero(amf3 to 1) to restart decode.
+		if header.IsAmf3Command() &&  stream.Requires(1) {
+			stream.Reset(1)
+		} else {
+			stream.Reset(0)
+		}
+
+		// decode command object.
+		if command == RTMP_AMF0_COMMAND_CONNECT {
+			pkt = &RtmpConnectAppPacket{}
+		}
+		// TODO: FIXME: implements it
+	}
+
+	if err == nil && pkt != nil {
+		err = pkt.Decode(stream)
 	}
 
 	return
@@ -230,6 +267,6 @@ type RtmpConnectAppPacket struct {
 	TransactionId float64
 	CommandObject *RtmpAmf0Object
 }
-func (r *RtmpConnectAppPacket) Decode(b []byte) (err error) {
+func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
 	return
 }

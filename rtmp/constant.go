@@ -33,13 +33,13 @@ reserved for usage with RTM Chunk Stream protocol. Protocol messages
 with IDs 3-6 are reserved for usage of RTMP. Protocol message with ID
 7 is used between edge server and origin server.
 */
-const RTMP_MSG_SetChunkSize = 0x01
-const RTMP_MSG_AbortMessage = 0x02
-const RTMP_MSG_Acknowledgement = 0x03
-const RTMP_MSG_UserControlMessage = 0x04
-const RTMP_MSG_WindowAcknowledgementSize = 0x05
-const RTMP_MSG_SetPeerBandwidth = 0x06
-const RTMP_MSG_EdgeAndOriginServerCommand = 0x07
+const RTMP_MSG_SetChunkSize  = 0x01
+const RTMP_MSG_AbortMessage  = 0x02
+const RTMP_MSG_Acknowledgement  = 0x03
+const RTMP_MSG_UserControlMessage  = 0x04
+const RTMP_MSG_WindowAcknowledgementSize  = 0x05
+const RTMP_MSG_SetPeerBandwidth  = 0x06
+const RTMP_MSG_EdgeAndOriginServerCommand  = 0x07
 /**
 3. Types of messages
 The server and the client send messages over the network to
@@ -59,8 +59,8 @@ contains related parameters. A client or a server can request Remote
 Procedure Calls (RPC) over streams that are communicated using the
 command messages to the peer.
 */
-const RTMP_MSG_AMF3CommandMessage = 17 // 0x11
-const RTMP_MSG_AMF0CommandMessage = 20 // 0x14
+const RTMP_MSG_AMF3CommandMessage = 17 // = 0x11
+const RTMP_MSG_AMF0CommandMessage = 20 // = 0x14
 /**
 3.2. Data message
 The client or the server sends this message to send Metadata or any
@@ -69,8 +69,8 @@ data(audio, video etc.) like creation time, duration, theme and so
 on. These messages have been assigned message type value of 18 for
 AMF0 and message type value of 15 for AMF3.
 */
-const RTMP_MSG_AMF0DataMessage = 18 // 0x12
-const RTMP_MSG_AMF3DataMessage = 15 // 0x0F
+const RTMP_MSG_AMF0DataMessage = 18 // = 0x12
+const RTMP_MSG_AMF3DataMessage = 15 // = 0x0F
 /**
 3.3. Shared object message
 A shared object is a Flash object (a collection of name value pairs)
@@ -79,14 +79,14 @@ so on. The message types kMsgContainer=19 for AMF0 and
 kMsgContainerEx=16 for AMF3 are reserved for shared object events.
 Each message can contain multiple events.
 */
-const RTMP_MSG_AMF3SharedObject = 16 // 0x10
-const RTMP_MSG_AMF0SharedObject = 19 // 0x13
+const RTMP_MSG_AMF3SharedObject = 16 // = 0x10
+const RTMP_MSG_AMF0SharedObject = 19 // = 0x13
 /**
 3.4. Audio message
 The client or the server sends this message to send audio data to the
 peer. The message type value of 8 is reserved for audio messages.
 */
-const RTMP_MSG_AudioMessage = 8 // 0x08
+const RTMP_MSG_AudioMessage = 8 // = 0x08
 /* *
 3.5. Video message
 The client or the server sends this message to send video data to the
@@ -95,14 +95,14 @@ These messages are large and can delay the sending of other type of
 messages. To avoid such a situation, the video message is assigned
 the lowest priority.
 */
-const RTMP_MSG_VideoMessage = 9 // 0x09
+const RTMP_MSG_VideoMessage = 9 // = 0x09
 /**
 3.6. Aggregate message
 An aggregate message is a single message that contains a list of submessages.
 The message type value of 22 is reserved for aggregate
 messages.
 */
-const RTMP_MSG_AggregateMessage = 22 // 0x16
+const RTMP_MSG_AggregateMessage = 22 // = 0x16
 /****************************************************************************
 *****************************************************************************
 ****************************************************************************/
@@ -166,11 +166,107 @@ const RTMP_MIN_CHUNK_SIZE = 2
 * 6.1. Chunk Format
 * Extended timestamp: 0 or 4 bytes
 * This field MUST be sent when the normal timsestamp is set to
-* 0xffffff, it MUST NOT be sent if the normal timestamp is set to
-* anything else. So for values less than 0xffffff the normal
+* = 0xffffff, it MUST NOT be sent if the normal timestamp is set to
+* anything else. So for values less than = 0xffffff the normal
 * timestamp field SHOULD be used in which case the extended timestamp
-* MUST NOT be present. For values greater than or equal to 0xffffff
+* MUST NOT be present. For values greater than or equal to = 0xffffff
 * the normal timestamp field MUST NOT be used and MUST be set to
-* 0xffffff and the extended timestamp MUST be sent.
+* = 0xffffff and the extended timestamp MUST be sent.
 */
-const RTMP_EXTENDED_TIMESTAMP = 0xFFFFFF
+const RTMP_EXTENDED_TIMESTAMP  = 0xFFFFFF
+
+/****************************************************************************
+*****************************************************************************
+****************************************************************************/
+/**
+* amf0 command message, command name macros
+*/
+const RTMP_AMF0_COMMAND_CONNECT = "connect"
+const RTMP_AMF0_COMMAND_CREATE_STREAM = "createStream"
+const RTMP_AMF0_COMMAND_CLOSE_STREAM = "closeStream"
+const RTMP_AMF0_COMMAND_PLAY = "play"
+const RTMP_AMF0_COMMAND_PAUSE = "pause"
+const RTMP_AMF0_COMMAND_ON_BW_DONE = "onBWDone"
+const RTMP_AMF0_COMMAND_ON_STATUS = "onStatus"
+const RTMP_AMF0_COMMAND_RESULT = "_result"
+const RTMP_AMF0_COMMAND_ERROR = "_error"
+const RTMP_AMF0_COMMAND_RELEASE_STREAM = "releaseStream"
+const RTMP_AMF0_COMMAND_FC_PUBLISH = "FCPublish"
+const RTMP_AMF0_COMMAND_UNPUBLISH = "FCUnpublish"
+const RTMP_AMF0_COMMAND_PUBLISH = "publish"
+const RTMP_AMF0_DATA_SAMPLE_ACCESS = "|RtmpSampleAccess"
+const RTMP_AMF0_DATA_SET_DATAFRAME = "@setDataFrame"
+const RTMP_AMF0_DATA_ON_METADATA = "onMetaData"
+
+/**
+* band width check method name, which will be invoked by client.
+* band width check mothods use SrsBandwidthPacket as its internal packet type,
+* so ensure you set command name when you use it.
+*/
+// server play control
+const SRS_BW_CHECK_START_PLAY = "onSrsBandCheckStartPlayBytes"
+const SRS_BW_CHECK_STARTING_PLAY = "onSrsBandCheckStartingPlayBytes"
+const SRS_BW_CHECK_STOP_PLAY = "onSrsBandCheckStopPlayBytes"
+const SRS_BW_CHECK_STOPPED_PLAY = "onSrsBandCheckStoppedPlayBytes"
+
+// server publish control
+const SRS_BW_CHECK_START_PUBLISH  = "onSrsBandCheckStartPublishBytes"
+const SRS_BW_CHECK_STARTING_PUBLISH = "onSrsBandCheckStartingPublishBytes"
+const SRS_BW_CHECK_STOP_PUBLISH = "onSrsBandCheckStopPublishBytes"
+const SRS_BW_CHECK_STOPPED_PUBLISH = "onSrsBandCheckStoppedPublishBytes"
+
+// EOF control.
+const SRS_BW_CHECK_FINISHED = "onSrsBandCheckFinished"
+// for flash, it will sendout a final call,
+// used to confirm got the report.
+// actually, client send out this packet and close the connection,
+// so server may cannot got this packet, ignore is ok.
+const SRS_BW_CHECK_FLASH_FINAL = "finalClientPacket"
+
+// client only
+const SRS_BW_CHECK_PLAYING = "onSrsBandCheckPlaying"
+const SRS_BW_CHECK_PUBLISHING = "onSrsBandCheckPublishing"
+
+/****************************************************************************
+*****************************************************************************
+****************************************************************************/
+/**
+* the chunk stream id used for some under-layer message,
+* for example, the PC(protocol control) message.
+*/
+const RTMP_CID_ProtocolControl = 0x02
+/**
+* the AMF0/AMF3 command message, invoke method and return the result, over NetConnection.
+* generally use = 0x03.
+*/
+const RTMP_CID_OverConnection = 0x03
+/**
+* the AMF0/AMF3 command message, invoke method and return the result, over NetConnection,
+* the midst state(we guess).
+* rarely used, e.g. onStatus(NetStream.Play.Reset).
+*/
+const RTMP_CID_OverConnection2 = 0x04
+/**
+* the stream message(amf0/amf3), over NetStream.
+* generally use = 0x05.
+*/
+const RTMP_CID_OverStream = 0x05
+/**
+* the stream message(amf0/amf3), over NetStream, the midst state(we guess).
+* rarely used, e.g. play("mp4:mystram.f4v")
+*/
+const RTMP_CID_OverStream2 = 0x08
+/**
+* the stream message(video), over NetStream
+* generally use = 0x06.
+*/
+const RTMP_CID_Video = 0x06
+/**
+* the stream message(audio), over NetStream.
+* generally use = 0x07.
+*/
+const RTMP_CID_Audio = 0x07
+
+/****************************************************************************
+*****************************************************************************
+****************************************************************************/

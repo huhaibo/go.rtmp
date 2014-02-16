@@ -174,7 +174,6 @@ type RtmpProtocol struct {
 	// output chunk stream chunk size.
 	outChunkSize int32
 }
-
 /**
 * create the rtmp protocol.
  */

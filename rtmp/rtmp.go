@@ -29,7 +29,7 @@ type RtmpServer interface {
 }
 func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
 	var err error
-	r := new(rtmpServer)
+	r := &rtmpServer{}
 	if r.protocol, err = NewRtmpProtocol(conn); err != nil {
 		return r, err
 	}

@@ -84,10 +84,10 @@ type RtmpChunkStream struct {
 	MsgCount int64
 }
 func NewRtmpChunkStream(cid int) (r *RtmpChunkStream) {
-	r = new(RtmpChunkStream)
+	r = &RtmpChunkStream{}
 
 	r.CId = cid
-	r.Header = new(RtmpMessageHeader)
+	r.Header = &RtmpMessageHeader{}
 
 	return
 }
@@ -153,12 +153,12 @@ type RtmpProtocol interface {
 * create the rtmp protocol.
  */
 func NewRtmpProtocol(conn *net.TCPConn) (RtmpProtocol, error) {
-	r := new(rtmpProtocol)
+	r := &rtmpProtocol{}
 
 	r.conn = NewRtmpSocket(conn)
 	r.chunkStreams = map[int]*RtmpChunkStream{}
 	r.buffer = NewRtmpBuffer(r.conn)
-	r.handshake = new(RtmpHandshake)
+	r.handshake = &RtmpHandshake{}
 
 	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
 	r.outChunkSize = r.inChunkSize
@@ -213,6 +213,7 @@ type RtmpPacket interface {
 	Decode([]byte) (error)
 }
 func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
+	// decode specified packet type
 	if header.IsAmf0Command() {
 	}
 

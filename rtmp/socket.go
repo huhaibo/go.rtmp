@@ -33,7 +33,7 @@ type RtmpSocket interface {
 	SendBytes() (uint64)
 }
 func NewRtmpSocket(conn *net.TCPConn) (RtmpSocket) {
-	r := new(rtmpTCPSocket)
+	r := &rtmpTCPSocket{}
 	r.conn = conn
 	return r
 }

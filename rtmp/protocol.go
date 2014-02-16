@@ -81,7 +81,7 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 		err = RtmpError{code:ERROR_GO_REFLECT_NEVER_NIL, desc:"param should never be nil"}
 		return
 	}
-	if rv.Elem().CanSet() {
+	if !rv.Elem().CanSet() {
 		err = RtmpError{code:ERROR_GO_REFLECT_CAN_SET, desc:"param should be settable"}
 		return
 	}
@@ -235,7 +235,7 @@ func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 	// create msg when new chunk stream start
 	if chunk.Msg == nil {
-		chunk.Msg = new(RtmpMessage)
+		chunk.Msg = &RtmpMessage{}
 	}
 
 	// read message header from socket to buffer.

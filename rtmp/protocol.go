@@ -265,15 +265,16 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 		// ffmpeg/librtmp may donot send this filed, need to detect the value.
 		// @see also: http://blog.csdn.net/win_lin/article/details/13363699
-		timestamp := r.buffer.ReadUInt32()
+		timestamp := r.buffer.TopUInt32()
 
 		// compare to the chunk timestamp, which is set by chunk message header
 		// type 0,1 or 2.
 		if chunk.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP && chunk.Header.Timestamp != uint64(timestamp) {
 			mh_size -= 4
-			r.buffer.Next(-4)
 		} else {
 			chunk.Header.Timestamp = uint64(timestamp)
+			// consume the 4bytes timestamp.
+			r.buffer.Next(4)
 		}
 	}
 

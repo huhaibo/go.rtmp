@@ -61,12 +61,6 @@ func (r *RtmpBuffer) EnsureBufferBytes(n int) (err error) {
 	return
 }
 
-// Len returns the number of bytes of the unread portion of the buffer;
-// b.Len() == len(b.Bytes()).
-func (r *RtmpBuffer) Len() (int) {
-	return r.buffer.Len()
-}
-
 // Next returns a slice containing the next n bytes from the buffer,
 // advancing the buffer as if the bytes had been returned by Read.
 // If there are fewer than n bytes in the buffer, Next returns the entire buffer.
@@ -127,4 +121,12 @@ func (r* RtmpBuffer) ReadUInt32Le() (v uint32) {
 	}
 
 	return binary.LittleEndian.Uint32(buf)
+}
+
+// Get the first 4bytes, donot read it. in big-endian
+func (r* RtmpBuffer) TopUInt32() (v uint32) {
+	var buf []byte = r.buffer.Bytes()
+	buf = buf[0:4]
+
+	return binary.BigEndian.Uint32(buf)
 }

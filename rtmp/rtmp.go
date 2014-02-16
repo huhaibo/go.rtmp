@@ -23,24 +23,30 @@ package rtmp
 
 import "net"
 
-type RtmpServer struct {
-	protocol *RtmpProtocol
+type RtmpServer interface {
+	Handshake() (err error)
+	ConnectApp() (err error)
 }
-func NewRtmpServer(conn *net.TCPConn) (r *RtmpServer, err error) {
-	r = new(RtmpServer)
+func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
+	var err error
+	r := new(rtmpServer)
 	if r.protocol, err = NewRtmpProtocol(conn); err != nil {
-		return
+		return r, err
 	}
-	return
+	return r, err
 }
 
-func (r *RtmpServer) Handshake() (err error) {
+type rtmpServer struct {
+	protocol RtmpProtocol
+}
+
+func (r *rtmpServer) Handshake() (err error) {
 	// TODO: FIXME: try complex then simple handshake.
 	err = r.protocol.SimpleHandshake()
 	return
 }
 
-func (r *RtmpServer) ConnectApp() (err error) {
+func (r *rtmpServer) ConnectApp() (err error) {
 	//var msg *RtmpMessage
 	var pkt *RtmpConnectAppPacket
 	if _, err = r.protocol.ExpectMessage(&pkt); err != nil {

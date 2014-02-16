@@ -144,12 +144,36 @@ type RtmpAckWindowSize struct {
 	acked_size uint64
 }
 
+type RtmpProtocol interface {
+	SimpleHandshake() (err error)
+	RecvMessage() (msg *RtmpMessage, err error)
+	ExpectMessage(v interface {}) (msg *RtmpMessage, err error)
+}
+/**
+* create the rtmp protocol.
+ */
+func NewRtmpProtocol(conn *net.TCPConn) (RtmpProtocol, error) {
+	r := new(rtmpProtocol)
+
+	r.conn = NewRtmpSocket(conn)
+	r.chunkStreams = map[int]*RtmpChunkStream{}
+	r.buffer = NewRtmpBuffer(r.conn)
+	r.handshake = new(RtmpHandshake)
+
+	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
+	r.outChunkSize = r.inChunkSize
+
+	rand.Seed(time.Now().UnixNano())
+
+	return r, nil
+}
+
 /**
 * the protocol provides the rtmp-message-protocol services,
 * to recv RTMP message from RTMP chunk stream,
 * and to send out RTMP message over RTMP chunk stream.
 */
-type RtmpProtocol struct {
+type rtmpProtocol struct {
 // handshake
 	handshake *RtmpHandshake
 // peer in/out
@@ -167,24 +191,6 @@ type RtmpProtocol struct {
 // peer out
 	// output chunk stream chunk size.
 	outChunkSize int32
-}
-/**
-* create the rtmp protocol.
- */
-func NewRtmpProtocol(conn *net.TCPConn) (r *RtmpProtocol, err error) {
-	r = new(RtmpProtocol)
-
-	r.conn = NewRtmpSocket(conn)
-	r.chunkStreams = map[int]*RtmpChunkStream{}
-	r.buffer = NewRtmpBuffer(r.conn)
-	r.handshake = new(RtmpHandshake)
-
-	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
-	r.outChunkSize = r.inChunkSize
-
-	rand.Seed(time.Now().UnixNano())
-
-	return
 }
 
 /**
@@ -206,7 +212,7 @@ type RtmpPacket interface {
 	*/
 	Decode([]byte) (error)
 }
-func ParseRtmpPacket(r *RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
+func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
 	if header.IsAmf0Command() {
 	}
 

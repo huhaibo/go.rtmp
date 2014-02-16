@@ -26,7 +26,7 @@ import (
 	"math/rand"
 )
 
-func (r *RtmpProtocol) handshake_read_c0c1() (err error) {
+func (r *rtmpProtocol) handshake_read_c0c1() (err error) {
 	var handshake *RtmpHandshake = r.handshake
 
 	if handshake.c0c1 == nil {
@@ -38,7 +38,7 @@ func (r *RtmpProtocol) handshake_read_c0c1() (err error) {
 
 	return
 }
-func (r *RtmpProtocol) handshake_make_s0s1s2() (err error) {
+func (r *rtmpProtocol) handshake_make_s0s1s2() (err error) {
 	var handshake *RtmpHandshake = r.handshake
 
 	if handshake.s0s1s2 == nil {
@@ -47,7 +47,7 @@ func (r *RtmpProtocol) handshake_make_s0s1s2() (err error) {
 
 	return
 }
-func (r *RtmpProtocol) handshake_read_c2() (err error) {
+func (r *rtmpProtocol) handshake_read_c2() (err error) {
 	var handshake *RtmpHandshake = r.handshake
 
 	if handshake.c2 == nil {
@@ -60,7 +60,7 @@ func (r *RtmpProtocol) handshake_read_c2() (err error) {
 	return
 }
 
-func (r *RtmpProtocol) SimpleHandshake() (err error) {
+func (r *rtmpProtocol) SimpleHandshake() (err error) {
 	var handshake *RtmpHandshake = r.handshake
 
 	// read the c0c1 from connection if not read yet

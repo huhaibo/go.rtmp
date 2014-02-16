@@ -40,7 +40,7 @@ func (r *RtmpAckWindowSize) ShouldAckRead(n uint64) (bool) {
 * the payload is not decoded, use srs_rtmp_expect_message<T> if requires
 * specifies message.
 */
-func (r *RtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
+func (r *rtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 	for {
 		if msg, err = r.recv_interlaced_message(); err != nil {
 			return
@@ -70,7 +70,7 @@ func (r *RtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 *		_, err = r.protocol.ExpectMessage(&pkt)
 * 		// use the decoded pkt contains the connect app info.
 */
-func (r *RtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err error) {
+func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err error) {
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 	if rv.Kind() != reflect.Ptr {
@@ -122,7 +122,7 @@ func (r *RtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 	return
 }
 
-func (r *RtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
+func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	// acknowledgement
 	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes()) {
 		return r.response_acknowledgement_message()
@@ -133,7 +133,7 @@ func (r *RtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	return
 }
 
-func (r *RtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
+func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	// chunk stream basic header.
 	format, cid, _, err := r.read_basic_header()
 	if err != nil {
@@ -160,7 +160,7 @@ func (r *RtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	return
 }
 
-func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
+func (r *rtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
 	if err = r.buffer.EnsureBufferBytes(1); err != nil {
 		return
 	}
@@ -191,7 +191,7 @@ func (r *RtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, e
 	return
 }
 
-func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) (mh_size int, err error) {
+func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) (mh_size int, err error) {
 	/**
 	* we should not assert anything about fmt, for the first packet.
 	* (when first packet, the chunk->msg is NULL).
@@ -354,7 +354,7 @@ func (r *RtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 	return
 }
 
-func (r *RtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMessage, err error) {
+func (r *rtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMessage, err error) {
 	// empty message
 	if int32(chunk.Header.PayloadLength) <= 0 {
 		msg = chunk.Msg
@@ -388,7 +388,7 @@ func (r *RtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMe
 	return
 }
 
-func (r *RtmpProtocol) response_acknowledgement_message() (err error) {
+func (r *rtmpProtocol) response_acknowledgement_message() (err error) {
 	// TODO: FIXME: implements it
 	return
 }

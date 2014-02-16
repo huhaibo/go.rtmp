@@ -200,5 +200,12 @@ func NewRtmpProtocol(conn *net.TCPConn) (r *RtmpProtocol, err error) {
 * 		it's better for me to use components -- the message use the packet as payload.
 */
 // @see: SrsPacket
-type RtmpPacket struct {
+type RtmpPacket interface {
+	/**
+	* decode functions.
+	*/
+	Decode([]byte) (error)
+}
+
+type RtmpConnectAppPacket struct {
 }

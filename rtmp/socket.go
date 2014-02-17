@@ -24,6 +24,7 @@ package rtmp
 import (
 	"net"
 	"io"
+	"fmt"
 )
 
 // socket to read or write data.
@@ -67,6 +68,10 @@ func (r *rtmpTCPSocket) Write(b []byte) (n int, err error) {
 
 	if n > 0 {
 		r.send_bytes += uint64(n)
+	}
+
+	if n != len(b) {
+		err = RtmpError{code:ERROR_GO_SOCKET_WRITE_PARTIAL, desc:fmt.Sprintf("write partial, expect=%v, actual=%v", len(b), n)}
 	}
 
 	return

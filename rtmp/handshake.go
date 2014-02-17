@@ -60,7 +60,7 @@ func (r *rtmpProtocol) handshake_read_c2() (err error) {
 	return
 }
 
-func (r *rtmpProtocol) SimpleHandshake() (err error) {
+func (r *rtmpProtocol) SimpleHandshake2Client() (err error) {
 	var handshake *RtmpHandshake = r.handshake
 
 	// read the c0c1 from connection if not read yet

@@ -46,6 +46,10 @@ func (r *rtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 			return
 		}
 
+		if err = r.buffer.Truncate(); err != nil {
+			return
+		}
+
 		if msg == nil {
 			continue
 		}
@@ -132,7 +136,7 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 }
 
 func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage, err error) {
-	msg = &RtmpMessage{}
+	msg = NewRtmpMessage()
 
 	cid = pkt.GetPerferCid()
 
@@ -143,19 +147,27 @@ func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage
 
 	b := make([]byte, size)
 	s := NewRtmpStream(b)
-	err = pkt.Encode(s)
+	if err = pkt.Encode(s); err != nil {
+		return
+	}
+
+	msg.Header.MessageType = pkt.GetMessageType()
+	msg.Header.PayloadLength = uint32(size)
+	msg.Payload = b
 
 	return
 }
 
-func (r *rtmpProtocol) SendMessage(pkt interface {}, header *RtmpMessageHeader) (err error) {
+func (r *rtmpProtocol) SendMessage(pkt interface {}, stream_id uint32) (err error) {
 	var msg *RtmpMessage = nil
 
 	if packet, ok := pkt.(RtmpEncoder); ok {
 		// if pkt is encoder, encode packet to message.
-		if msg.PerferCid, msg, err = r.EncodeMessage(packet); err != nil {
+		var cid int
+		if cid, msg, err = r.EncodeMessage(packet); err != nil {
 			return
 		}
+		msg.PerferCid = cid
 	} else if direct_msg, ok := pkt.(*RtmpMessage); ok {
 		// if pkt is already encoded message, directly use it.
 		msg = direct_msg
@@ -164,12 +176,17 @@ func (r *rtmpProtocol) SendMessage(pkt interface {}, header *RtmpMessageHeader) 
 	if msg == nil {
 		return RtmpError{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
 	}
+	if stream_id > 0 {
+		msg.Header.StreamId = stream_id
+	}
 
 	// always write the header event payload is empty.
 	msg.SentPayloadLength = -1
 	for len(msg.Payload) > msg.SentPayloadLength {
+		msg.SentPayloadLength = int(math.Max(0, float64(msg.SentPayloadLength)))
+
 		// generate the header.
-		header_size := 0
+		var real_header []byte
 
 		if msg.SentPayloadLength <= 0 {
 			// write new chunk stream header, fmt is 0
@@ -184,9 +201,60 @@ func (r *rtmpProtocol) SendMessage(pkt interface {}, header *RtmpMessageHeader) 
 				pheader.WriteUInt24(uint32(msg.Header.Timestamp))
 			}
 
-			header_size = len(r.outHeaderFmt0) - pheader.Len()
+			// message_length, 3bytes, big-endian
+			// message_type, 1bytes
+			// message_length, 3bytes, little-endian
+			pheader.WriteUInt24(msg.Header.PayloadLength).WriteByte(msg.Header.MessageType).WriteUInt32Le(msg.Header.StreamId)
+
+			// chunk extended timestamp header, 0 or 4 bytes, big-endian
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
+			}
+
+			real_header = r.outHeaderFmt0[0:len(r.outHeaderFmt0) - pheader.Left()]
+		} else {
+			// write no message header chunk stream, fmt is 3
+			var pheader RtmpStream = NewRtmpStream(r.outHeaderFmt3)
+			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
+
+			// chunk extended timestamp header, 0 or 4 bytes, big-endian
+			// 6.1.3. Extended Timestamp
+			// This field is transmitted only when the normal time stamp in the
+			// chunk message header is set to 0x00ffffff. If normal time stamp is
+			// set to any value less than 0x00ffffff, this field MUST NOT be
+			// present. This field MUST NOT be present if the timestamp field is not
+			// present. Type 3 chunks MUST NOT have this field.
+			// adobe changed for Type3 chunk:
+			//		FMLE always sendout the extended-timestamp,
+			// 		must send the extended-timestamp to FMS,
+			//		must send the extended-timestamp to flash-player.
+			// @see: ngx_rtmp_prepare_message
+			// @see: http://blog.csdn.net/win_lin/article/details/13363699
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
+			}
+
+			real_header = r.outHeaderFmt3[0:len(r.outHeaderFmt3) - pheader.Left()]
 		}
-		// TODO: FIXME: implements it
+
+		// sendout header
+		if _, err = r.conn.Write(real_header); err != nil {
+			return
+		}
+
+		// sendout payload
+		if len(msg.Payload) > 0 {
+			payload_size := len(msg.Payload) - msg.SentPayloadLength
+			payload_size = int(math.Min(float64(r.outChunkSize), float64(payload_size)))
+
+			data := msg.Payload[msg.SentPayloadLength:msg.SentPayloadLength+payload_size]
+			if _, err = r.conn.Write(data); err != nil {
+				return
+			}
+
+			// consume sendout bytes when not empty packet.
+			msg.SentPayloadLength += payload_size
+		}
 	}
 
 	return
@@ -233,8 +301,8 @@ func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	}
 
 	// get the cached chunk stream.
-	var chunk *RtmpChunkStream
-	if chunk, ok := r.chunkStreams[cid]; !ok {
+	chunk, ok := r.chunkStreams[cid]
+	if !ok {
 		chunk = NewRtmpChunkStream(cid)
 		r.chunkStreams[cid] = chunk
 	}
@@ -332,7 +400,7 @@ func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 	// create msg when new chunk stream start
 	if chunk.Msg == nil {
-		chunk.Msg = &RtmpMessage{}
+		chunk.Msg = NewRtmpMessage()
 	}
 
 	// read message header from socket to buffer.
@@ -422,16 +490,15 @@ func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 		// ffmpeg/librtmp may donot send this filed, need to detect the value.
 		// @see also: http://blog.csdn.net/win_lin/article/details/13363699
-		timestamp := r.buffer.TopUInt32()
+		timestamp := r.buffer.ReadUInt32()
 
 		// compare to the chunk timestamp, which is set by chunk message header
 		// type 0,1 or 2.
 		if chunk.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP && chunk.Header.Timestamp != uint64(timestamp) {
 			mh_size -= 4
+			r.buffer.Next(-4)
 		} else {
 			chunk.Header.Timestamp = uint64(timestamp)
-			// consume the 4bytes timestamp.
-			r.buffer.Next(4)
 		}
 	}
 

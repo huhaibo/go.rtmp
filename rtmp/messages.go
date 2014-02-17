@@ -61,6 +61,11 @@ type RtmpMessage struct {
 	 */
 	SentPayloadLength int
 }
+func NewRtmpMessage() (*RtmpMessage) {
+	r := &RtmpMessage{}
+	r.Header = &RtmpMessageHeader{}
+	return r
+}
 
 /**
 * incoming chunk stream maybe interlaced,
@@ -183,11 +188,10 @@ type RtmpProtocol interface {
 	//EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage, err error)
 	/**
 	* send message to peer over rtmp connection.
-	* ignore and use default header if param header is nil.
 	* if pkt is RtmpEncoder, encode the pkt to RtmpMessage and send out.
 	* if pkt is RtmpMessage already, directly send it out.
 	 */
-	SendMessage(pkt interface {}, header *RtmpMessageHeader) (err error)
+	SendMessage(pkt interface {}, stream_id uint32) (err error)
 }
 /**
 * create the rtmp protocol.
@@ -282,6 +286,10 @@ type RtmpEncoder interface {
 	* get the rtmp chunk cid the packet perfered.
 	 */
 	GetPerferCid() (v int)
+	/**
+	* get packet message type
+	 */
+	GetMessageType() (v byte)
 	/**
 	* get the size of packet, to create the RtmpStream.
 	 */
@@ -400,6 +408,9 @@ func (r *RtmpSetWindowAckSizePacket) Decode(s RtmpStream) (err error) {
 }
 func (r *RtmpSetWindowAckSizePacket) GetPerferCid() (v int) {
 	return RTMP_CID_ProtocolControl
+}
+func (r *RtmpSetWindowAckSizePacket) GetMessageType() (v byte) {
+	return RTMP_MSG_WindowAcknowledgementSize
 }
 func (r *RtmpSetWindowAckSizePacket) GetSize() (v int) {
 	return 4

@@ -92,7 +92,7 @@ func (r *RtmpAmf0Object) Read(codec RtmpAmf0Codec, s RtmpStream) (err error) {
 }
 func (r *RtmpAmf0Object) Set(k string, v *RtmpAmf0Any) (err error) {
 	if v == nil {
-		err = RtmpError{code:ERROR_RTMP_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
+		err = RtmpError{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
 		return
 	}
 	r.properties[k] = v
@@ -133,7 +133,8 @@ func (r *RtmpAmf0Any) Read(codec RtmpAmf0Codec, s RtmpStream) (err error) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
 		return
 	}
-	r.Maker = s.TopByte()
+	r.Maker = s.ReadByte()
+	s.Next(-1)
 
 	switch {
 	case r.Maker == RTMP_AMF0_String:

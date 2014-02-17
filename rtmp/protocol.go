@@ -131,6 +131,72 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 	return
 }
 
+func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage, err error) {
+	msg = &RtmpMessage{}
+
+	cid = pkt.GetPerferCid()
+
+	size := pkt.GetSize()
+	if size <= 0 {
+		return
+	}
+
+	b := make([]byte, size)
+	s := NewRtmpStream(b)
+	err = pkt.Encode(s)
+
+	return
+}
+
+func (r *rtmpProtocol) SendMessage(pkt interface {}, header *RtmpMessageHeader) (err error) {
+	var msg *RtmpMessage = nil
+
+	if packet, ok := pkt.(RtmpEncoder); ok {
+		// if pkt is encoder, encode packet to message.
+		if msg.PerferCid, msg, err = r.EncodeMessage(packet); err != nil {
+			return
+		}
+	} else if direct_msg, ok := pkt.(*RtmpMessage); ok {
+		// if pkt is already encoded message, directly use it.
+		msg = direct_msg
+	}
+
+	if msg == nil {
+		return RtmpError{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
+	}
+
+	// always write the header event payload is empty.
+	msg.SentPayloadLength = -1
+	for len(msg.Payload) > msg.SentPayloadLength {
+		// generate the header.
+		header_size := 0
+
+		if msg.SentPayloadLength <= 0 {
+			// write new chunk stream header, fmt is 0
+			var pheader RtmpStream = NewRtmpStream(r.outHeaderFmt0)
+			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
+
+			// chunk message header, 11 bytes
+			// timestamp, 3bytes, big-endian
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt24(uint32(0xFFFFFF))
+			} else {
+				pheader.WriteUInt24(uint32(msg.Header.Timestamp))
+			}
+
+			header_size = len(r.outHeaderFmt0) - pheader.Len()
+		}
+		// TODO: FIXME: implements it
+	}
+
+	return
+}
+
+func (r *rtmpProtocol) on_send_message(msg *RtmpMessage) (err error) {
+	// TODO: FIXME: implements it
+	return
+}
+
 func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	// acknowledgement
 	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes()) {
@@ -158,15 +224,17 @@ func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 }
 
 func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
+	var format byte
+	var cid int
+
 	// chunk stream basic header.
-	format, cid, _, err := r.read_basic_header()
-	if err != nil {
+	if format, cid, _, err = r.read_basic_header(); err != nil {
 		return
 	}
 
 	// get the cached chunk stream.
-	chunk, ok := r.chunkStreams[cid]
-	if !ok {
+	var chunk *RtmpChunkStream
+	if chunk, ok := r.chunkStreams[cid]; !ok {
 		chunk = NewRtmpChunkStream(cid)
 		r.chunkStreams[cid] = chunk
 	}
@@ -179,6 +247,11 @@ func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	// read msg payload from chunk stream.
 	if msg, err = r.read_message_payload(chunk); err != nil {
 		return
+	}
+
+	// set the perfer cid of message
+	if msg != nil {
+		msg.PerferCid = cid
 	}
 
 	return

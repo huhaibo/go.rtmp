@@ -28,6 +28,8 @@ import (
 )
 
 type RtmpBytesCodec interface {
+	// all read methods donot return error,
+	// if error, panic instead.
 	Next(n int) ([]byte)
 	Read(p []byte) (v []byte)
 	ReadByte() (v byte)
@@ -39,6 +41,11 @@ type RtmpBytesCodec interface {
 	ReadString(n int) (string)
 	TopByte() (byte)
 	TopUInt32() (v uint32)
+	// all write methods return the interface itself,
+	// if error, panic instead.
+	WriteUInt32(v uint32) (RtmpBytesCodec)
+	WriteUInt24(v uint32) (RtmpBytesCodec)
+	WriteByte(v byte) (RtmpBytesCodec)
 }
 type RtmpStream interface {
 	RtmpBytesCodec
@@ -218,4 +225,15 @@ func (r *rtmpBytesCodec) ReadString(n int) (v string) {
 	}
 
 	return string(b)
+}
+
+// ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
+func (r* rtmpBytesCodec) WriteUInt32(v uint32) (RtmpBytesCodec) {
+	b := make([]byte, 4)
+	binary.BigEndian.PutUint32(b, v)
+	if _, err := r.buffer.Write(b); err != nil {
+		panic(err)
+	}
+
+	return r
 }

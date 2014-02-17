@@ -49,6 +49,17 @@ type RtmpMessage struct {
 	* when len(Payload) == ReceivedPayloadLength, message receive completed.
 	 */
 	ReceivedPayloadLength int
+	/**
+	* get the perfered cid(chunk stream id) which sendout over.
+	* set at decoding, and canbe used for directly send message,
+	* for example, dispatch to all connections.
+	* @see: SrsSharedPtrMessage.SrsSharedPtr.perfer_cid
+	*/
+	PerferCid int
+	/**
+	* the payload sent length.
+	 */
+	SentPayloadLength int
 }
 
 /**
@@ -145,10 +156,38 @@ type RtmpAckWindowSize struct {
 }
 
 type RtmpProtocol interface {
-	SimpleHandshake() (err error)
-	RecvMessage() (msg *RtmpMessage, err error)
-	DecodeMessage(msg *RtmpMessage) (pkt interface {}, err error)
+	/**
+	* do simple handshake with client, user can try simple/complex interlace,
+	* that is, try complex handshake first, use simple if complex handshake failed.
+	 */
+	SimpleHandshake2Client() (err error)
+	/**
+	* recv message from connection.
+	* the payload of message is []byte, user can decode it by DecodeMessage.
+	 */
+	//RecvMessage() (msg *RtmpMessage, err error)
+	/**
+	* decode the received message to pkt.
+	 */
+	//DecodeMessage(msg *RtmpMessage) (pkt interface {}, err error)
+	/**
+	* expect specified message by v, where v must be a ptr,
+	* protocol stack will RecvMessage from connection and convert/set msg to v
+	* if type matched, or drop the message and try again.
+	 */
 	ExpectMessage(v interface {}) (msg *RtmpMessage, err error)
+	/**
+	* encode the packet to message, then send out by SendMessage.
+	* return the cid which packet prefer.
+	 */
+	//EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage, err error)
+	/**
+	* send message to peer over rtmp connection.
+	* ignore and use default header if param header is nil.
+	* if pkt is RtmpEncoder, encode the pkt to RtmpMessage and send out.
+	* if pkt is RtmpMessage already, directly send it out.
+	 */
+	SendMessage(pkt interface {}, header *RtmpMessageHeader) (err error)
 }
 /**
 * create the rtmp protocol.
@@ -163,11 +202,29 @@ func NewRtmpProtocol(conn *net.TCPConn) (RtmpProtocol, error) {
 
 	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
 	r.outChunkSize = r.inChunkSize
+	r.outHeaderFmt0 = make([]byte, RTMP_MAX_FMT0_HEADER_SIZE)
+	r.outHeaderFmt3 = make([]byte, RTMP_MAX_FMT3_HEADER_SIZE)
 
 	rand.Seed(time.Now().UnixNano())
 
 	return r, nil
 }
+
+/**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	11bytes message header,
+* 	4bytes timestamp header,
+* that is, 1+11+4=16bytes.
+*/
+const RTMP_MAX_FMT0_HEADER_SIZE = 16
+/**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	4bytes timestamp header,
+* that is, 1+4=5bytes.
+*/
+const RTMP_MAX_FMT3_HEADER_SIZE = 5
 
 /**
 * the protocol provides the rtmp-message-protocol services,
@@ -192,12 +249,17 @@ type rtmpProtocol struct {
 // peer out
 	// output chunk stream chunk size.
 	outChunkSize int32
+	// bytes cache, size is RTMP_MAX_FMT0_HEADER_SIZE
+	outHeaderFmt0 []byte
+	// bytes cache, size is RTMP_MAX_FMT3_HEADER_SIZE
+	outHeaderFmt3 []byte
 }
 
 /**
 * the payload codec by the RtmpPacket.
 * @see: RTMP 4.2. Message Payload
 */
+// @see: SrsPacket
 /**
 * the decoded message payload.
 * @remark we seperate the packet from message,
@@ -206,9 +268,28 @@ type rtmpProtocol struct {
 * 		we can merge the message and packet, using OOAD hierachy, packet extends from message,
 * 		it's better for me to use components -- the message use the packet as payload.
 */
-// @see: SrsPacket
 type RtmpDecoder interface {
-	Decode(RtmpStream) (error)
+	/**
+	* decode the packet from the s, which is created by rtmp message.
+	 */
+	Decode(s RtmpStream) (err error)
+}
+/**
+* encode the rtmp packet to payload of rtmp message.
+ */
+type RtmpEncoder interface {
+	/**
+	* get the rtmp chunk cid the packet perfered.
+	 */
+	GetPerferCid() (v int)
+	/**
+	* get the size of packet, to create the RtmpStream.
+	 */
+	GetSize() (v int)
+	/**
+	* encode the packet to s, which is created by size=GetSize()
+	 */
+	Encode(s RtmpStream) (err error)
 }
 func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (packet interface {}, err error) {
 	var pkt RtmpDecoder= nil
@@ -315,5 +396,18 @@ func (r *RtmpSetWindowAckSizePacket) Decode(s RtmpStream) (err error) {
 		return
 	}
 	r.AcknowledgementWindowSize = s.ReadUInt32()
+	return
+}
+func (r *RtmpSetWindowAckSizePacket) GetPerferCid() (v int) {
+	return RTMP_CID_ProtocolControl
+}
+func (r *RtmpSetWindowAckSizePacket) GetSize() (v int) {
+	return 4
+}
+func (r *RtmpSetWindowAckSizePacket) Encode(s RtmpStream) (err error) {
+	if !s.Requires(4) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode ack size packet failed."}
+	}
+	s.WriteUInt32(r.AcknowledgementWindowSize)
 	return
 }

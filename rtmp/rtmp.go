@@ -173,5 +173,7 @@ func (r *rtmpServer) ConnectApp(req *RtmpRequest) (err error) {
 }
 
 func (r *rtmpServer) SetWindowAckSize(ack_size int) (err error) {
+	pkt := RtmpSetWindowAckSizePacket{AcknowledgementWindowSize:ack_size}
+	err = r.protocol.SendMessage(&pkt, nil)
 	return
 }

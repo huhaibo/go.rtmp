@@ -126,6 +126,7 @@ func (r *RtmpRequest) discovery_app() (err error) {
 type RtmpServer interface {
 	Handshake() (err error)
 	ConnectApp(req *RtmpRequest) (err error)
+	SetWindowAckSize(ack_size int) (err error)
 }
 func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
 	var err error
@@ -169,4 +170,8 @@ func (r *rtmpServer) ConnectApp(req *RtmpRequest) (err error) {
 	}
 
 	return req.discovery_app()
+}
+
+func (r *rtmpServer) SetWindowAckSize(ack_size int) (err error) {
+	return
 }

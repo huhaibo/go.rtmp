@@ -206,14 +206,12 @@ type rtmpProtocol struct {
 * 		it's better for me to use components -- the message use the packet as payload.
 */
 // @see: SrsPacket
-type RtmpPacket interface {
-	/**
-	* decode functions.
-	*/
+type RtmpDecoder interface {
 	Decode(RtmpStream) (error)
 }
-func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (pkt RtmpPacket, err error) {
-	stream := NewRtmpStream(payload)
+func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (packet interface {}, err error) {
+	var pkt RtmpDecoder= nil
+	var stream RtmpStream = NewRtmpStream(payload)
 
 	// decode specified packet type
 	if header.IsAmf0Command() || header.IsAmf3Command() || header.IsAmf0Data() || header.IsAmf3Data() {
@@ -251,7 +249,7 @@ func ParseRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) 
 	}
 
 	if err == nil && pkt != nil {
-		err = pkt.Decode(stream)
+		packet, err = pkt, pkt.Decode(stream)
 	}
 
 	return

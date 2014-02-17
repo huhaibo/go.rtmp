@@ -94,8 +94,8 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 			continue
 		}
 
-		var pkt RtmpPacket
-		if pkt, err = ParseRtmpPacket(r, msg.Header, msg.Payload); err != nil {
+		var pkt interface {}
+		if pkt, err = DecodeRtmpPacket(r, msg.Header, msg.Payload); err != nil {
 			return
 		}
 		if pkt == nil {

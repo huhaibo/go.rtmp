@@ -147,6 +147,7 @@ type RtmpAckWindowSize struct {
 type RtmpProtocol interface {
 	SimpleHandshake() (err error)
 	RecvMessage() (msg *RtmpMessage, err error)
+	DecodeMessage(msg *RtmpMessage) (pkt interface {}, err error)
 	ExpectMessage(v interface {}) (msg *RtmpMessage, err error)
 }
 /**
@@ -246,7 +247,10 @@ func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte)
 			pkt = &RtmpConnectAppPacket{}
 		}
 		// TODO: FIXME: implements it
+	} else if header.IsWindowAcknowledgementSize() {
+		pkt = &RtmpSetWindowAckSizePacket{}
 	}
+	// TODO: FIXME: implements it
 
 	if err == nil && pkt != nil {
 		packet, err = pkt, pkt.Decode(stream)
@@ -260,6 +264,7 @@ func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte)
 * The client sends the connect command to the server to request
 * connection to a server application instance.
 */
+// @see: SrsConnectAppPacket
 type RtmpConnectAppPacket struct {
 	CommandName string
 	TransactionId float64
@@ -292,5 +297,23 @@ func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
 		return
 	}
 
+	return
+}
+
+/**
+* 5.5. Window Acknowledgement Size (5)
+* The client or the server sends this message to inform the peer which
+* window size to use when sending acknowledgment.
+*/
+// @see: SrsSetWindowAckSizePacket
+type RtmpSetWindowAckSizePacket struct {
+	AcknowledgementWindowSize uint32
+}
+func (r *RtmpSetWindowAckSizePacket) Decode(s RtmpStream) (err error) {
+	if !s.Requires(4) {
+		err = RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode ack window size failed."}
+		return
+	}
+	r.AcknowledgementWindowSize = s.ReadUInt32()
 	return
 }

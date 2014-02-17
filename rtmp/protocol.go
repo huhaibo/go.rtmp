@@ -64,6 +64,19 @@ func (r *rtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 }
 
 /**
+* decode the message, return the decoded rtmp packet.
+ */
+// @see: SrsCommonMessage.decode_packet(SrsProtocol* protocol)
+func (r *rtmpProtocol) DecodeMessage(msg *RtmpMessage) (pkt interface {}, err error) {
+	if msg == nil || msg.Payload == nil {
+		return
+	}
+
+	pkt, err = DecodeRtmpPacket(r, msg.Header, msg.Payload)
+	return
+}
+
+/**
 * expect a specified message by v, drop others util got specified one.
 * for example:
 * 		var pkt *RtmpConnectAppPacket
@@ -90,12 +103,8 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 		if msg, err = r.RecvMessage(); err != nil {
 			return
 		}
-		if msg == nil || msg.Payload == nil{
-			continue
-		}
-
 		var pkt interface {}
-		if pkt, err = DecodeRtmpPacket(r, msg.Header, msg.Payload); err != nil {
+		if pkt, err = r.DecodeMessage(msg); err != nil {
 			return
 		}
 		if pkt == nil {
@@ -126,6 +135,21 @@ func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	// acknowledgement
 	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes()) {
 		return r.response_acknowledgement_message()
+	}
+
+	// decode the msg if needed
+	var pkt interface {}
+	if msg.Header.IsSetChunkSize() || msg.Header.IsUserControlMessage() || msg.Header.IsWindowAcknowledgementSize() {
+		if pkt, err = r.DecodeMessage(msg); err != nil {
+			return
+		}
+	}
+
+	if msg.Header.IsWindowAcknowledgementSize() {
+		pkt := pkt.(*RtmpSetWindowAckSizePacket)
+		if pkt.AcknowledgementWindowSize > 0 {
+			r.inAckSize.ack_window_size = pkt.AcknowledgementWindowSize
+		}
 	}
 
 	// TODO: FIXME: implements it
@@ -404,4 +428,13 @@ func (r *RtmpMessageHeader) IsAmf0Data() (bool) {
 }
 func (r *RtmpMessageHeader) IsAmf3Data() (bool) {
 	return r.MessageType == RTMP_MSG_AMF3DataMessage
+}
+func (r *RtmpMessageHeader) IsWindowAcknowledgementSize() (bool) {
+	return r.MessageType == RTMP_MSG_WindowAcknowledgementSize
+}
+func (r *RtmpMessageHeader) IsSetChunkSize() (bool) {
+	return r.MessageType == RTMP_MSG_SetChunkSize
+}
+func (r *RtmpMessageHeader) IsUserControlMessage() (bool) {
+	return r.MessageType == RTMP_MSG_UserControlMessage
 }

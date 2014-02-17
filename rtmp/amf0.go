@@ -84,12 +84,33 @@ func (r *RtmpAmf0Object) Read(codec RtmpAmf0Codec, s RtmpStream) (err error) {
 		}
 
 		// add property
-		r.Set(property_name, &property_value)
+		if err = r.Set(property_name, &property_value); err != nil {
+			return
+		}
 	}
 	return
 }
-func (r *RtmpAmf0Object) Set(k string, v *RtmpAmf0Any) {
+func (r *RtmpAmf0Object) Set(k string, v *RtmpAmf0Any) (err error) {
+	if v == nil {
+		err = RtmpError{code:ERROR_RTMP_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
+		return
+	}
 	r.properties[k] = v
+	return
+}
+func (r *RtmpAmf0Object) GetPropertyString(k string) (v string, ok bool) {
+	var prop *RtmpAmf0Any
+	if prop, ok = r.properties[k]; !ok {
+		return
+	}
+	return prop.String()
+}
+func (r *RtmpAmf0Object) GetPropertyNumber(k string) (v float64, ok bool) {
+	var prop *RtmpAmf0Any
+	if prop, ok = r.properties[k]; !ok {
+		return
+	}
+	return prop.Number()
 }
 
 /**
@@ -138,23 +159,23 @@ func (r *RtmpAmf0Any) IsNil() (v bool) {
 func (r *RtmpAmf0Any) IsObjectEof() (v bool) {
 	return r.Maker == RTMP_AMF0_ObjectEnd
 }
-func (r *RtmpAmf0Any) IsString() (v bool) {
-	return r.Maker == RTMP_AMF0_String
+func (r *RtmpAmf0Any) String() (v string, ok bool) {
+	if r.Maker == RTMP_AMF0_String {
+		v, ok = r.Value.(string), true
+	}
+	return
 }
-func (r *RtmpAmf0Any) String() (v string) {
-	return r.Value.(string)
+func (r *RtmpAmf0Any) Number() (v float64, ok bool) {
+	if r.Maker == RTMP_AMF0_Number {
+		v, ok = r.Value.(float64), true
+	}
+	return
 }
-func (r *RtmpAmf0Any) IsNumber() (v bool) {
-	return r.Maker == RTMP_AMF0_Number
-}
-func (r *RtmpAmf0Any) Number() (v float64) {
-	return r.Value.(float64)
-}
-func (r *RtmpAmf0Any) IsBoolean() (v bool) {
-	return r.Maker == RTMP_AMF0_Boolean
-}
-func (r *RtmpAmf0Any) Boolean() (v bool) {
-	return r.Value.(bool)
+func (r *RtmpAmf0Any) Boolean() (v bool, ok bool) {
+	if r.Maker == RTMP_AMF0_Boolean {
+		v, ok = r.Value.(bool), true
+	}
+	return
 }
 
 type RtmpAmf0Codec interface {

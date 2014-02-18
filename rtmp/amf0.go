@@ -52,6 +52,76 @@ const RTMP_AMF0_OriginStrictArray = 0x20
 const RTMP_AMF0_Invalid = 0x3F
 
 /**
+* to ensure in inserted order.
+* for the FMLE will crash when AMF0Object is not ordered by inserted,
+* if ordered in map, the string compare order, the FMLE will creash when
+* get the response of connect app.
+*/
+// @see: SrsUnSortedHashtable
+type RtmpAmf0UnSortedHashtable struct {
+	property_index []string
+	properties map[string]*RtmpAmf0Any
+}
+func NewRtmpAmf0UnSortedHashtable() (*RtmpAmf0UnSortedHashtable) {
+	r := &RtmpAmf0UnSortedHashtable{}
+	r.properties = make(map[string]*RtmpAmf0Any)
+	return r
+}
+func (r *RtmpAmf0UnSortedHashtable) Count() (n int) {
+	return len(r.properties)
+}
+func (r *RtmpAmf0UnSortedHashtable) Size() (n int) {
+	if r.Count() <= 0 {
+		return 0
+	}
+	for k, v := range r.properties {
+		n += RtmpAmf0SizeUtf8(k)
+		n += v.Size()
+	}
+	return
+}
+func (r *RtmpAmf0UnSortedHashtable) Write(codec *RtmpAmf0Codec) (err error) {
+	// properties
+	for _, k := range r.property_index {
+		v := r.properties[k]
+
+		if err = codec.WriteUtf8(k); err != nil {
+			return
+		}
+		if err = v.Write(codec); err != nil {
+			return
+		}
+	}
+	return
+}
+func (r *RtmpAmf0UnSortedHashtable) Set(k string, v *RtmpAmf0Any) (err error) {
+	if v == nil {
+		err = RtmpError{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
+		return
+	}
+
+	if _, ok := r.properties[k]; !ok {
+		r.property_index = append(r.property_index, k)
+	}
+	r.properties[k] = v
+	return
+}
+func (r *RtmpAmf0UnSortedHashtable) GetPropertyString(k string) (v string, ok bool) {
+	var prop *RtmpAmf0Any
+	if prop, ok = r.properties[k]; !ok {
+		return
+	}
+	return prop.String()
+}
+func (r *RtmpAmf0UnSortedHashtable) GetPropertyNumber(k string) (v float64, ok bool) {
+	var prop *RtmpAmf0Any
+	if prop, ok = r.properties[k]; !ok {
+		return
+	}
+	return prop.Number()
+}
+
+/**
 * 2.5 Object Type
 * anonymous-object-type = object-marker *(object-property)
 * object-property = (UTF-8 value-type) | (UTF-8-empty object-end-marker)
@@ -59,25 +129,21 @@ const RTMP_AMF0_Invalid = 0x3F
 // @see: SrsAmf0Object
 type RtmpAmf0Object struct {
 	marker byte
-	properties map[string]*RtmpAmf0Any
+	properties *RtmpAmf0UnSortedHashtable
 }
 func NewRtmpAmf0Object() (*RtmpAmf0Object) {
 	r := &RtmpAmf0Object{}
 	r.marker = RTMP_AMF0_Object
-	r.properties = make(map[string]*RtmpAmf0Any)
+	r.properties = NewRtmpAmf0UnSortedHashtable()
 	return r
 }
 
 func (r *RtmpAmf0Object) Size() (n int) {
-	if len(r.properties) <= 0 {
+	if n = r.properties.Size(); n <= 0 {
 		return 0
 	}
 
-	n = 1
-	for k, v := range r.properties {
-		n += RtmpAmf0SizeUtf8(k)
-		n += v.Size()
-	}
+	n += 1
 	n += RtmpAmf0SizeObjectEOF()
 	return
 }
@@ -127,39 +193,21 @@ func (r *RtmpAmf0Object) Write(codec *RtmpAmf0Codec) (err error) {
 	codec.stream.WriteByte(byte(RTMP_AMF0_Object))
 
 	// properties
-	for k, v := range r.properties {
-		if err = codec.WriteUtf8(k); err != nil {
-			return
-		}
-		if err = v.Write(codec); err != nil {
-			return
-		}
+	if err = r.properties.Write(codec); err != nil {
+		return
 	}
 
 	// object EOF
 	return codec.WriteObjectEOF()
 }
 func (r *RtmpAmf0Object) Set(k string, v *RtmpAmf0Any) (err error) {
-	if v == nil {
-		err = RtmpError{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
-		return
-	}
-	r.properties[k] = v
-	return
+	return r.properties.Set(k, v)
 }
 func (r *RtmpAmf0Object) GetPropertyString(k string) (v string, ok bool) {
-	var prop *RtmpAmf0Any
-	if prop, ok = r.properties[k]; !ok {
-		return
-	}
-	return prop.String()
+	return r.properties.GetPropertyString(k)
 }
 func (r *RtmpAmf0Object) GetPropertyNumber(k string) (v float64, ok bool) {
-	var prop *RtmpAmf0Any
-	if prop, ok = r.properties[k]; !ok {
-		return
-	}
-	return prop.Number()
+	return r.properties.GetPropertyNumber(k)
 }
 
 /**
@@ -172,26 +220,22 @@ func (r *RtmpAmf0Object) GetPropertyNumber(k string) (v float64, ok bool) {
 type RtmpAmf0EcmaArray struct {
 	marker byte
 	count uint32
-	properties map[string]*RtmpAmf0Any
+	properties *RtmpAmf0UnSortedHashtable
 }
 func NewRtmpAmf0EcmaArray() (*RtmpAmf0EcmaArray) {
 	r := &RtmpAmf0EcmaArray{}
 	r.marker = RTMP_AMF0_EcmaArray
-	r.properties = make(map[string]*RtmpAmf0Any)
+	r.properties = NewRtmpAmf0UnSortedHashtable()
 	return r
 }
 
 func (r *RtmpAmf0EcmaArray) Size() (n int) {
-	if len(r.properties) <= 0 {
+	if n = r.properties.Size(); n <= 0 {
 		return 0
 	}
 
-	n = 1
+	n += 1
 	n += 4
-	for k, v := range r.properties {
-		n += RtmpAmf0SizeUtf8(k)
-		n += v.Size()
-	}
 	n += RtmpAmf0SizeObjectEOF()
 	return
 }
@@ -257,40 +301,23 @@ func (r *RtmpAmf0EcmaArray) Write(codec *RtmpAmf0Codec) (err error) {
 	codec.stream.WriteUInt32(r.count)
 
 	// properties
-	for k, v := range r.properties {
-		if err = codec.WriteUtf8(k); err != nil {
-			return
-		}
-		if err = v.Write(codec); err != nil {
-			return
-		}
+	if err = r.properties.Write(codec); err != nil {
+		return
 	}
 
 	// object EOF
 	return codec.WriteObjectEOF()
 }
 func (r *RtmpAmf0EcmaArray) Set(k string, v *RtmpAmf0Any) (err error) {
-	if v == nil {
-		err = RtmpError{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 EcmaArray property value should never be nil"}
-		return
-	}
-	r.properties[k] = v
-	r.count = uint32(len(r.properties))
+	err = r.properties.Set(k, v)
+	r.count = uint32(r.properties.Count())
 	return
 }
 func (r *RtmpAmf0EcmaArray) GetPropertyString(k string) (v string, ok bool) {
-	var prop *RtmpAmf0Any
-	if prop, ok = r.properties[k]; !ok {
-		return
-	}
-	return prop.String()
+	return r.properties.GetPropertyString(k)
 }
 func (r *RtmpAmf0EcmaArray) GetPropertyNumber(k string) (v float64, ok bool) {
-	var prop *RtmpAmf0Any
-	if prop, ok = r.properties[k]; !ok {
-		return
-	}
-	return prop.Number()
+	return r.properties.GetPropertyNumber(k)
 }
 
 /**
@@ -323,6 +350,9 @@ func ToAmf0(v interface {}) (*RtmpAmf0Any) {
 		return &RtmpAmf0Any{ Marker:RTMP_AMF0_EcmaArray, Value:t }
 	}
 	return nil
+}
+func ToAmf0Null() (*RtmpAmf0Any) {
+	return &RtmpAmf0Any{ Marker:RTMP_AMF0_Null }
 }
 func (r *RtmpAmf0Any) Size() (int) {
 	switch {

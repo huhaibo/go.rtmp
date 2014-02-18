@@ -528,3 +528,44 @@ func (r *RtmpSetPeerBandwidthPacket) Encode(s *RtmpHPBuffer) (err error) {
 	s.WriteUInt32(r.Bandwidth).WriteByte(r.BandwidthType)
 	return
 }
+
+/**
+* 5.6. Set Peer Bandwidth (6)
+* The client or the server sends this message to update the output
+* bandwidth of the peer.
+*/
+// @see: SrsOnBWDonePacket
+type RtmpOnBWDonePacket struct {
+	CommandName string
+	TransactionId float64
+	Args *RtmpAmf0Any
+}
+func NewRtmpOnBWDonePacket() (*RtmpOnBWDonePacket) {
+	r := &RtmpOnBWDonePacket{}
+	r.CommandName = RTMP_AMF0_COMMAND_ON_BW_DONE
+	r.Args = ToAmf0Null()
+	return r
+}
+// RtmpEncoder
+func (r *RtmpOnBWDonePacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *RtmpOnBWDonePacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *RtmpOnBWDonePacket) GetSize() (v int) {
+	return RtmpAmf0SizeString(r.CommandName) + RtmpAmf0SizeNumber() + RtmpAmf0SizeNullOrUndefined()
+}
+func (r *RtmpOnBWDonePacket) Encode(s *RtmpHPBuffer) (err error) {
+	codec := NewRtmpAmf0Codec(s)
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = codec.WriteNull(); err != nil {
+		return
+	}
+	return
+}

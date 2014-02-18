@@ -194,9 +194,16 @@ type RtmpServer interface {
 	* response the client connect app request
 	* @param req the request data genereated by ConnectApp
 	* @param server_ip the ip of server to send to client, ignore if "".
+	* 		for example, "192.168.1.12"
 	* @param extra_data the extra data to send to client, ignore if nil.
+	* 		where the slice used to keep the sequence of data.
+	* 		for example, []map[string]string { {"server":"go.srs"}, {"version":"1.0"} }
 	 */
-	ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data map[string]string) (err error)
+	ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data []map[string]string) (err error)
+	/**
+	* call client onBWDone() method
+	 */
+	CallOnBWDone() (err error)
 }
 func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
 	var err error
@@ -252,14 +259,16 @@ func (r *rtmpServer) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error
 	return r.protocol.SendPacket(&pkt, uint32(0))
 }
 
-func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data map[string]string) (err error) {
+func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data []map[string]string) (err error) {
 	data := NewRtmpAmf0EcmaArray()
 	data.Set("version", ToAmf0(RTMP_SIG_FMS_VER))
 	if server_ip != "" {
 		data.Set("srs_server_ip", ToAmf0(server_ip))
 	}
-	for k, v := range extra_data {
-		data.Set(k, ToAmf0(v))
+	for _, item := range extra_data {
+		for k, v := range item {
+			data.Set(k, ToAmf0(v))
+		}
 	}
 
 	var pkt *RtmpConnectAppResPacket = NewRtmpConnectAppResPacket()
@@ -267,5 +276,10 @@ func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra
 	pkt.InfoSet(SLEVEL, SLEVEL_Status).InfoSet(SCODE, SCODE_ConnectSuccess).InfoSet(SDESC, "Connection succeeded")
 	pkt.InfoSet("objectEncoding", float64(req.ObjectEncoding)).InfoSet("data", data)
 
+	return r.protocol.SendPacket(pkt, uint32(0))
+}
+
+func (r *rtmpServer) CallOnBWDone() (err error) {
+	var pkt *RtmpOnBWDonePacket = NewRtmpOnBWDonePacket()
 	return r.protocol.SendPacket(pkt, uint32(0))
 }

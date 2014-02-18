@@ -158,20 +158,21 @@ func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage
 	return
 }
 
-func (r *rtmpProtocol) SendMessage(pkt interface {}, stream_id uint32) (err error) {
+func (r *rtmpProtocol) SendPacket(pkt RtmpEncoder, stream_id uint32) (err error) {
 	var msg *RtmpMessage = nil
 
-	if packet, ok := pkt.(RtmpEncoder); ok {
-		// if pkt is encoder, encode packet to message.
-		var cid int
-		if cid, msg, err = r.EncodeMessage(packet); err != nil {
-			return
-		}
-		msg.PerferCid = cid
-	} else if direct_msg, ok := pkt.(*RtmpMessage); ok {
-		// if pkt is already encoded message, directly use it.
-		msg = direct_msg
+	// if pkt is encoder, encode packet to message.
+	var cid int
+	if cid, msg, err = r.EncodeMessage(pkt); err != nil {
+		return
 	}
+	msg.PerferCid = cid
+
+	return r.SendMessage(msg, stream_id)
+}
+
+func (r *rtmpProtocol) SendMessage(pkt *RtmpMessage, stream_id uint32) (err error) {
+	var msg *RtmpMessage = pkt
 
 	if msg == nil {
 		return RtmpError{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
@@ -190,7 +191,7 @@ func (r *rtmpProtocol) SendMessage(pkt interface {}, stream_id uint32) (err erro
 
 		if msg.SentPayloadLength <= 0 {
 			// write new chunk stream header, fmt is 0
-			var pheader RtmpStream = NewRtmpStream(r.outHeaderFmt0)
+			var pheader *RtmpHPBuffer = NewRtmpStream(r.outHeaderFmt0)
 			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
 
 			// chunk message header, 11 bytes
@@ -214,7 +215,7 @@ func (r *rtmpProtocol) SendMessage(pkt interface {}, stream_id uint32) (err erro
 			real_header = r.outHeaderFmt0[0:len(r.outHeaderFmt0) - pheader.Left()]
 		} else {
 			// write no message header chunk stream, fmt is 3
-			var pheader RtmpStream = NewRtmpStream(r.outHeaderFmt3)
+			var pheader *RtmpHPBuffer = NewRtmpStream(r.outHeaderFmt3)
 			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
 
 			// chunk extended timestamp header, 0 or 4 bytes, big-endian

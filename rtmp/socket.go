@@ -23,37 +23,30 @@ package rtmp
 
 import (
 	"net"
-	"io"
 	"fmt"
 )
 
 // socket to read or write data.
-type RtmpSocket interface {
-	io.ReadWriter
-	RecvBytes() (uint64)
-	SendBytes() (uint64)
-}
-func NewRtmpSocket(conn *net.TCPConn) (RtmpSocket) {
-	r := &rtmpTCPSocket{}
-	r.conn = conn
-	return r
-}
-
-type rtmpTCPSocket struct {
+type RtmpSocket struct {
 	conn *net.TCPConn
 	recv_bytes uint64
 	send_bytes uint64
 }
+func NewRtmpSocket(conn *net.TCPConn) (*RtmpSocket) {
+	r := &RtmpSocket{}
+	r.conn = conn
+	return r
+}
 
-func (r *rtmpTCPSocket) RecvBytes() (uint64) {
+func (r *RtmpSocket) RecvBytes() (uint64) {
 	return r.recv_bytes
 }
 
-func (r *rtmpTCPSocket) SendBytes() (uint64) {
+func (r *RtmpSocket) SendBytes() (uint64) {
 	return r.send_bytes
 }
 
-func (r *rtmpTCPSocket) Read(b []byte) (n int, err error) {
+func (r *RtmpSocket) Read(b []byte) (n int, err error) {
 	n, err = r.conn.Read(b)
 
 	if n > 0 {
@@ -63,7 +56,7 @@ func (r *rtmpTCPSocket) Read(b []byte) (n int, err error) {
 	return
 }
 
-func (r *rtmpTCPSocket) Write(b []byte) (n int, err error) {
+func (r *RtmpSocket) Write(b []byte) (n int, err error) {
 	n, err = r.conn.Write(b)
 
 	if n > 0 {

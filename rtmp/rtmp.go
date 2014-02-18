@@ -33,7 +33,50 @@ const (
 	RtmpCodecAMF0 = 0
 	RtmpCodecAMF3 = 3
 	RtmpDefaultPort = 1935
+	// 5.6. Set Peer Bandwidth (6)
+	// the Limit type field:
+	// hard (0), soft (1), or dynamic (2)
+	RtmpPeerBandwidthHard = 0
+	RtmpPeerBandwidthSoft = 1
+	RtmpPeerBandwidthDynamic = 2
 )
+
+/**
+* the signature for packets to client.
+*/
+const RTMP_SIG_FMS_VER = "3,5,3,888"
+const RTMP_SIG_AMF0_VER = 0
+const RTMP_SIG_CLIENT_ID = "ASAICiss"
+
+/**
+* onStatus consts.
+*/
+const StatusLevel = "level"
+const StatusCode = "code"
+const StatusDescription = "description"
+const StatusDetails = "details"
+const StatusClientId = "clientid"
+// status value
+const StatusLevelStatus = "status"
+// status error
+const StatusLevelError = "error"
+// code value
+const StatusCodeConnectSuccess = "NetConnection.Connect.Success"
+const StatusCodeConnectRejected = "NetConnection.Connect.Rejected"
+const StatusCodeStreamReset = "NetStream.Play.Reset"
+const StatusCodeStreamStart = "NetStream.Play.Start"
+const StatusCodeStreamPause = "NetStream.Pause.Notify"
+const StatusCodeStreamUnpause = "NetStream.Unpause.Notify"
+const StatusCodePublishStart = "NetStream.Publish.Start"
+const StatusCodeDataStart = "NetStream.Data.Start"
+const StatusCodeUnpublishSuccess = "NetStream.Unpublish.Success"
+
+// FMLE
+const RTMP_AMF0_COMMAND_ON_FC_PUBLISH = "onFCPublish"
+const RTMP_AMF0_COMMAND_ON_FC_UNPUBLISH = "onFCUnpublish"
+
+// default stream id for response the createStream request.
+const SRS_DEFAULT_SID = 1
 
 /**
 * the original request from client.
@@ -123,10 +166,37 @@ func (r *RtmpRequest) discovery_app() (err error) {
 	return
 }
 
+/**
+* the rtmp server interface, user can create it by func NewRtmpServer().
+ */
 type RtmpServer interface {
+	/**
+	* handshake with client, try complex handshake first, use simple if failed.
+	 */
 	Handshake() (err error)
+	/**
+	* expect client send the connect app request,
+	* @param req set and parse data to the request
+	 */
 	ConnectApp(req *RtmpRequest) (err error)
+	/**
+	* set the ack size window
+	* @param ack_size in bytes, for example, 2.5 * 1000 * 1000
+	 */
 	SetWindowAckSize(ack_size uint32) (err error)
+	/**
+	* set the peer bandwidth,
+	* @param bandwidth in bytes, for example, 2.5 * 1000 * 1000
+	* @param bw_type can be RtmpPeerBandwidthHard, RtmpPeerBandwidthSoft or RtmpPeerBandwidthDynamic
+	 */
+	SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error)
+	/**
+	* response the client connect app request
+	* @param req the request data genereated by ConnectApp
+	* @param server_ip the ip of server to send to client, ignore if "".
+	* @param extra_data the extra data to send to client, ignore if nil.
+	 */
+	ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data map[string]string) (err error)
 }
 func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
 	var err error
@@ -174,6 +244,28 @@ func (r *rtmpServer) ConnectApp(req *RtmpRequest) (err error) {
 
 func (r *rtmpServer) SetWindowAckSize(ack_size uint32) (err error) {
 	pkt := RtmpSetWindowAckSizePacket{AcknowledgementWindowSize:ack_size}
-	err = r.protocol.SendMessage(&pkt, uint32(0))
-	return
+	return r.protocol.SendPacket(&pkt, uint32(0))
+}
+
+func (r *rtmpServer) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error) {
+	pkt := RtmpSetPeerBandwidthPacket{Bandwidth:bandwidth, BandwidthType:bw_type}
+	return r.protocol.SendPacket(&pkt, uint32(0))
+}
+
+func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data map[string]string) (err error) {
+	data := NewRtmpAmf0EcmaArray()
+	data.Set("version", CreateAmf0String(RTMP_SIG_FMS_VER))
+	if server_ip != "" {
+		data.Set("srs_server_ip", CreateAmf0String(server_ip))
+	}
+	for k, v := range extra_data {
+		data.Set(k, CreateAmf0String(v))
+	}
+
+	var pkt *RtmpConnectAppResPacket = NewRtmpConnectAppResPacket()
+	pkt.PropsSet("fmsVer", CreateAmf0String("FMS/"+RTMP_SIG_FMS_VER)).PropsSet("capabilities", CreateAmf0Number(float64(127))).PropsSet("mode", CreateAmf0Number(1))
+	pkt.InfoSet(StatusLevel, CreateAmf0String(StatusLevelStatus)).InfoSet(StatusCode, CreateAmf0String(StatusCodeConnectSuccess)).InfoSet(StatusDescription, CreateAmf0String("Connection succeeded"))
+	pkt.InfoSet("objectEncoding", CreateAmf0Number(float64(req.ObjectEncoding))).InfoSet("data", CreateAmf0EcmaArray(data))
+
+	return r.protocol.SendPacket(pkt, uint32(0))
 }

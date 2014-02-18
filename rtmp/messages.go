@@ -191,7 +191,8 @@ type RtmpProtocol interface {
 	* if pkt is RtmpEncoder, encode the pkt to RtmpMessage and send out.
 	* if pkt is RtmpMessage already, directly send it out.
 	 */
-	SendMessage(pkt interface {}, stream_id uint32) (err error)
+	SendPacket(pkt RtmpEncoder, stream_id uint32) (err error)
+	SendMessage(pkt *RtmpMessage, stream_id uint32) (err error)
 }
 /**
 * create the rtmp protocol.
@@ -240,12 +241,12 @@ type rtmpProtocol struct {
 	handshake *RtmpHandshake
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
-	conn RtmpSocket
+	conn *RtmpSocket
 // peer in
 	chunkStreams map[int]*RtmpChunkStream
 	// the bytes read from underlayer tcp connection,
 	// used for parse to RTMP message or packets.
-	buffer RtmpBuffer
+	buffer *RtmpHPBuffer
 	// input chunk stream chunk size.
 	inChunkSize int32
 	// the acked size
@@ -276,7 +277,7 @@ type RtmpDecoder interface {
 	/**
 	* decode the packet from the s, which is created by rtmp message.
 	 */
-	Decode(s RtmpStream) (err error)
+	Decode(s *RtmpHPBuffer) (err error)
 }
 /**
 * encode the rtmp packet to payload of rtmp message.
@@ -291,17 +292,17 @@ type RtmpEncoder interface {
 	 */
 	GetMessageType() (v byte)
 	/**
-	* get the size of packet, to create the RtmpStream.
+	* get the size of packet, to create the *RtmpHPBuffer.
 	 */
 	GetSize() (v int)
 	/**
 	* encode the packet to s, which is created by size=GetSize()
 	 */
-	Encode(s RtmpStream) (err error)
+	Encode(s *RtmpHPBuffer) (err error)
 }
 func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte) (packet interface {}, err error) {
 	var pkt RtmpDecoder= nil
-	var stream RtmpStream = NewRtmpStream(payload)
+	var stream *RtmpHPBuffer = NewRtmpStream(payload)
 
 	// decode specified packet type
 	if header.IsAmf0Command() || header.IsAmf3Command() || header.IsAmf0Data() || header.IsAmf3Data() {
@@ -333,11 +334,11 @@ func DecodeRtmpPacket(r RtmpProtocol, header *RtmpMessageHeader, payload []byte)
 
 		// decode command object.
 		if command == RTMP_AMF0_COMMAND_CONNECT {
-			pkt = &RtmpConnectAppPacket{}
+			pkt = NewRtmpConnectAppPacket()
 		}
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {
-		pkt = &RtmpSetWindowAckSizePacket{}
+		pkt =NewRtmpSetWindowAckSizePacket()
 	}
 	// TODO: FIXME: implements it
 
@@ -359,7 +360,11 @@ type RtmpConnectAppPacket struct {
 	TransactionId float64
 	CommandObject *RtmpAmf0Object
 }
-func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
+func NewRtmpConnectAppPacket() (*RtmpConnectAppPacket) {
+	return &RtmpConnectAppPacket{ TransactionId:float64(1.0) }
+}
+// RtmpDecoder
+func (r *RtmpConnectAppPacket) Decode(s *RtmpHPBuffer) (err error) {
 	codec := NewRtmpAmf0Codec(s)
 
 	if r.CommandName, err = codec.ReadString(); err != nil {
@@ -390,6 +395,73 @@ func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
 }
 
 /**
+* response for SrsConnectAppPacket.
+*/
+// @see: SrsConnectAppResPacket
+type RtmpConnectAppResPacket struct {
+	CommandName string
+	TransactionId float64
+	Props *RtmpAmf0Object
+	Info *RtmpAmf0Object
+}
+func NewRtmpConnectAppResPacket() (*RtmpConnectAppResPacket) {
+	r := &RtmpConnectAppResPacket{}
+	r.CommandName = RTMP_AMF0_COMMAND_RESULT
+	r.TransactionId = float64(1.0)
+	r.Props = NewRtmpAmf0Object()
+	r.Info = NewRtmpAmf0Object()
+	return r
+}
+func (r *RtmpConnectAppResPacket) PropsSet(k string, v *RtmpAmf0Any) (*RtmpConnectAppResPacket) {
+	r.Props.Set(k, v)
+	return r
+}
+func (r *RtmpConnectAppResPacket) InfoSet(k string, v *RtmpAmf0Any) (*RtmpConnectAppResPacket) {
+	// if empty or empty object, any value must has content.
+	if v == nil || v.Size() <= 0 {
+		return r
+	}
+
+	r.Info.Set(k, v)
+	return r
+}
+// RtmpEncoder
+func (r *RtmpConnectAppResPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *RtmpConnectAppResPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *RtmpConnectAppResPacket) GetSize() (v int) {
+	v = RtmpAmf0SizeString(r.CommandName)
+	v += RtmpAmf0SizeNumber()
+	v += r.Props.Size()
+	v += r.Info.Size()
+	return
+}
+func (r *RtmpConnectAppResPacket) Encode(s *RtmpHPBuffer) (err error) {
+	codec := NewRtmpAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if r.Props.Size() > 0 {
+		if err = codec.WriteObject(r.Props); err != nil {
+			return
+		}
+	}
+	if r.Info.Size() > 0 {
+		if err = codec.WriteObject(r.Info); err != nil {
+			return
+		}
+	}
+	return
+}
+
+/**
 * 5.5. Window Acknowledgement Size (5)
 * The client or the server sends this message to inform the peer which
 * window size to use when sending acknowledgment.
@@ -398,7 +470,11 @@ func (r *RtmpConnectAppPacket) Decode(s RtmpStream) (err error) {
 type RtmpSetWindowAckSizePacket struct {
 	AcknowledgementWindowSize uint32
 }
-func (r *RtmpSetWindowAckSizePacket) Decode(s RtmpStream) (err error) {
+func NewRtmpSetWindowAckSizePacket() (*RtmpSetWindowAckSizePacket) {
+	return &RtmpSetWindowAckSizePacket{}
+}
+// RtmpDecoder
+func (r *RtmpSetWindowAckSizePacket) Decode(s *RtmpHPBuffer) (err error) {
 	if !s.Requires(4) {
 		err = RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode ack window size failed."}
 		return
@@ -406,6 +482,7 @@ func (r *RtmpSetWindowAckSizePacket) Decode(s RtmpStream) (err error) {
 	r.AcknowledgementWindowSize = s.ReadUInt32()
 	return
 }
+// RtmpEncoder
 func (r *RtmpSetWindowAckSizePacket) GetPerferCid() (v int) {
 	return RTMP_CID_ProtocolControl
 }
@@ -415,10 +492,38 @@ func (r *RtmpSetWindowAckSizePacket) GetMessageType() (v byte) {
 func (r *RtmpSetWindowAckSizePacket) GetSize() (v int) {
 	return 4
 }
-func (r *RtmpSetWindowAckSizePacket) Encode(s RtmpStream) (err error) {
+func (r *RtmpSetWindowAckSizePacket) Encode(s *RtmpHPBuffer) (err error) {
 	if !s.Requires(4) {
 		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode ack size packet failed."}
 	}
 	s.WriteUInt32(r.AcknowledgementWindowSize)
+	return
+}
+
+/**
+* 5.6. Set Peer Bandwidth (6)
+* The client or the server sends this message to update the output
+* bandwidth of the peer.
+*/
+// @see: SrsSetPeerBandwidthPacket
+type RtmpSetPeerBandwidthPacket struct {
+	Bandwidth uint32
+	BandwidthType byte
+}
+// RtmpEncoder
+func (r *RtmpSetPeerBandwidthPacket) GetPerferCid() (v int) {
+	return RTMP_CID_ProtocolControl
+}
+func (r *RtmpSetPeerBandwidthPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_SetPeerBandwidth
+}
+func (r *RtmpSetPeerBandwidthPacket) GetSize() (v int) {
+	return 5
+}
+func (r *RtmpSetPeerBandwidthPacket) Encode(s *RtmpHPBuffer) (err error) {
+	if !s.Requires(5) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode set bandwidth packet failed."}
+	}
+	s.WriteUInt32(r.Bandwidth).WriteByte(r.BandwidthType)
 	return
 }

@@ -263,9 +263,9 @@ func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra
 	}
 
 	var pkt *RtmpConnectAppResPacket = NewRtmpConnectAppResPacket()
-	pkt.PropsSet("fmsVer", ToAmf0("FMS/"+RTMP_SIG_FMS_VER)).PropsSet("capabilities", ToAmf0(float64(127))).PropsSet("mode", ToAmf0(float64(1)))
-	pkt.InfoSet(SLEVEL, ToAmf0(SLEVEL_Status)).InfoSet(SCODE, ToAmf0(SCODE_ConnectSuccess)).InfoSet(SDESC, ToAmf0("Connection succeeded"))
-	pkt.InfoSet("objectEncoding", ToAmf0(float64(req.ObjectEncoding))).InfoSet("data", ToAmf0(data))
+	pkt.PropsSet("fmsVer", "FMS/"+RTMP_SIG_FMS_VER).PropsSet("capabilities", float64(127)).PropsSet("mode", float64(1))
+	pkt.InfoSet(SLEVEL, SLEVEL_Status).InfoSet(SCODE, SCODE_ConnectSuccess).InfoSet(SDESC, "Connection succeeded")
+	pkt.InfoSet("objectEncoding", float64(req.ObjectEncoding)).InfoSet("data", data)
 
 	return r.protocol.SendPacket(pkt, uint32(0))
 }

@@ -412,17 +412,18 @@ func NewRtmpConnectAppResPacket() (*RtmpConnectAppResPacket) {
 	r.Info = NewRtmpAmf0Object()
 	return r
 }
-func (r *RtmpConnectAppResPacket) PropsSet(k string, v *RtmpAmf0Any) (*RtmpConnectAppResPacket) {
-	r.Props.Set(k, v)
+func (r *RtmpConnectAppResPacket) PropsSet(k string, v interface {}) (*RtmpConnectAppResPacket) {
+	// if empty or empty object, any value must has content.
+	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+		r.Props.Set(k, a)
+	}
 	return r
 }
-func (r *RtmpConnectAppResPacket) InfoSet(k string, v *RtmpAmf0Any) (*RtmpConnectAppResPacket) {
+func (r *RtmpConnectAppResPacket) InfoSet(k string, v interface {}) (*RtmpConnectAppResPacket) {
 	// if empty or empty object, any value must has content.
-	if v == nil || v.Size() <= 0 {
-		return r
+	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+		r.Info.Set(k, a)
 	}
-
-	r.Info.Set(k, v)
 	return r
 }
 // RtmpEncoder

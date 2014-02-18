@@ -79,19 +79,19 @@ func (r *RtmpAmf0Object) Size() (n int) {
 	n += RtmpAmf0SizeObjectEOF()
 	return
 }
-func (r *RtmpAmf0Object) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0Object) Read(codec *RtmpAmf0Codec) (err error) {
 	// marker
-	if !s.Requires(1) {
+	if !codec.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object requires 1bytes marker"}
 		return
 	}
 
-	if r.marker = s.ReadByte(); r.marker != RTMP_AMF0_Object{
+	if r.marker = codec.stream.ReadByte(); r.marker != RTMP_AMF0_Object{
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object marker invalid"}
 		return
 	}
 
-	for !s.Empty() {
+	for !codec.stream.Empty() {
 		// property-name: utf8 string
 		var property_name string
 		if property_name, err = codec.ReadUtf8(); err != nil {
@@ -100,7 +100,7 @@ func (r *RtmpAmf0Object) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error)
 
 		// property-value: any
 		var property_value RtmpAmf0Any
-		if err = property_value.Read(codec, s); err != nil {
+		if err = property_value.Read(codec); err != nil {
 			return
 		}
 
@@ -116,20 +116,20 @@ func (r *RtmpAmf0Object) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error)
 	}
 	return
 }
-func (r *RtmpAmf0Object) Write(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0Object) Write(codec *RtmpAmf0Codec) (err error) {
 	// marker
-	if !s.Requires(1) {
+	if !codec.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object marker failed"}
 		return
 	}
-	s.WriteByte(byte(RTMP_AMF0_Object))
+	codec.stream.WriteByte(byte(RTMP_AMF0_Object))
 
 	// properties
 	for k, v := range r.properties {
 		if err = codec.WriteUtf8(k); err != nil {
 			return
 		}
-		if err = v.Write(codec, s); err != nil {
+		if err = v.Write(codec); err != nil {
 			return
 		}
 	}
@@ -194,26 +194,26 @@ func (r *RtmpAmf0EcmaArray) Size() (n int) {
 	return
 }
 // srs_amf0_read_ecma_array
-func (r *RtmpAmf0EcmaArray) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0EcmaArray) Read(codec *RtmpAmf0Codec) (err error) {
 	// marker
-	if !s.Requires(1) {
+	if !codec.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray requires 1bytes marker"}
 		return
 	}
 
-	if r.marker = s.ReadByte(); r.marker != RTMP_AMF0_EcmaArray{
+	if r.marker = codec.stream.ReadByte(); r.marker != RTMP_AMF0_EcmaArray{
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray marker invalid"}
 		return
 	}
 
 	// count
-	if !s.Requires(4) {
+	if !codec.stream.Requires(4) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 read ecma_array count failed"}
 		return
 	}
-	r.count = s.ReadUInt32()
+	r.count = codec.stream.ReadUInt32()
 
-	for !s.Empty() {
+	for !codec.stream.Empty() {
 		// property-name: utf8 string
 		var property_name string
 		if property_name, err = codec.ReadUtf8(); err != nil {
@@ -222,7 +222,7 @@ func (r *RtmpAmf0EcmaArray) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err err
 
 		// property-value: any
 		var property_value RtmpAmf0Any
-		if err = property_value.Read(codec, s); err != nil {
+		if err = property_value.Read(codec); err != nil {
 			return
 		}
 
@@ -239,27 +239,27 @@ func (r *RtmpAmf0EcmaArray) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err err
 	return
 }
 // srs_amf0_write_ecma_array
-func (r *RtmpAmf0EcmaArray) Write(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0EcmaArray) Write(codec *RtmpAmf0Codec) (err error) {
 	// marker
-	if !s.Requires(1) {
+	if !codec.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write EcmaArray marker failed"}
 		return
 	}
-	s.WriteByte(byte(RTMP_AMF0_EcmaArray))
+	codec.stream.WriteByte(byte(RTMP_AMF0_EcmaArray))
 
 	// count
-	if !s.Requires(4) {
+	if !codec.stream.Requires(4) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write ecma_array count failed"}
 		return
 	}
-	s.WriteUInt32(r.count)
+	codec.stream.WriteUInt32(r.count)
 
 	// properties
 	for k, v := range r.properties {
 		if err = codec.WriteUtf8(k); err != nil {
 			return
 		}
-		if err = v.Write(codec, s); err != nil {
+		if err = v.Write(codec); err != nil {
 			return
 		}
 	}
@@ -365,7 +365,7 @@ func (r *RtmpAmf0Any) Size() (int) {
 	}
 	return 0
 }
-func (r *RtmpAmf0Any) Write(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0Any) Write(codec *RtmpAmf0Codec) (err error) {
 	switch {
 	case r.Maker == RTMP_AMF0_String:
 		v, _ := r.String()
@@ -384,22 +384,22 @@ func (r *RtmpAmf0Any) Write(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
 		return codec.WriteObjectEOF()
 	case r.Maker == RTMP_AMF0_Object:
 		v, _ := r.Object()
-		return v.Write(codec, s)
+		return v.Write(codec)
 	case r.Maker == RTMP_AMF0_EcmaArray:
 		v, _ := r.EcmaArray()
-		return v.Write(codec, s)
+		return v.Write(codec)
 		// TODO: FIXME: implements it.
 	}
 	return
 }
-func (r *RtmpAmf0Any) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
+func (r *RtmpAmf0Any) Read(codec *RtmpAmf0Codec) (err error) {
 	// marker
-	if !s.Requires(1) {
+	if !codec.stream.Requires(1) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
 		return
 	}
-	r.Maker = s.ReadByte()
-	s.Next(-1)
+	r.Maker = codec.stream.ReadByte()
+	codec.stream.Next(-1)
 
 	switch {
 	case r.Maker == RTMP_AMF0_String:
@@ -409,7 +409,7 @@ func (r *RtmpAmf0Any) Read(codec *RtmpAmf0Codec, s *RtmpHPBuffer) (err error) {
 	case r.Maker == RTMP_AMF0_Number:
 		r.Value, err = codec.ReadNumber()
 	case r.Maker == RTMP_AMF0_Null || r.Maker == RTMP_AMF0_Undefined || r.Maker == RTMP_AMF0_ObjectEnd:
-		s.Next(1)
+		codec.stream.Next(1)
 	case r.Maker == RTMP_AMF0_Object:
 		r.Value, err = codec.ReadObject()
 	case r.Maker == RTMP_AMF0_EcmaArray:
@@ -693,24 +693,24 @@ func (r *RtmpAmf0Codec) ReadBoolean() (v bool, err error) {
 func (r *RtmpAmf0Codec) ReadObject() (v *RtmpAmf0Object, err error) {
 	// value
 	v = NewRtmpAmf0Object()
-	return v, v.Read(r, r.stream)
+	return v, v.Read(r)
 }
 
 // srs_amf0_read_ecma_array
 func (r *RtmpAmf0Codec) ReadEcmaArray() (v *RtmpAmf0EcmaArray, err error) {
 	// value
 	v = NewRtmpAmf0EcmaArray()
-	return v, v.Read(r, r.stream)
+	return v, v.Read(r)
 }
 
 // srs_amf0_write_object
 func (r *RtmpAmf0Codec) WriteObject(v *RtmpAmf0Object) (err error) {
-	return v.Write(r, r.stream)
+	return v.Write(r)
 }
 
 // srs_amf0_read_ecma_array
 func (r *RtmpAmf0Codec) WriteEcmaArray(v *RtmpAmf0EcmaArray) (err error) {
-	return v.Write(r, r.stream)
+	return v.Write(r)
 }
 
 // srs_amf0_write_object_eof

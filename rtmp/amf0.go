@@ -21,7 +21,9 @@
 
 package rtmp
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // AMF0 marker
 const RTMP_AMF0_Number = 0x00
@@ -298,67 +300,47 @@ func (r *RtmpAmf0EcmaArray) GetPropertyNumber(k string) (v float64, ok bool) {
 * 		| null-marker | undefined-marker | reference-type | ecma-array-type
 * 		| strict-array-type | date-type | long-string-type | xml-document-type
 * 		| typed-object-type
-* create any with RtmpAmf0Create, or create a default one and Read from stream.
+* create any with ToAmf0(), or create a default one and Read from stream.
 */
 // @see: SrsAmf0Any
 type RtmpAmf0Any struct {
-	Maker byte
+	Marker byte
 	Value interface {}
 }
-
-// TODO: FIXME: one func use type switch.
-func CreateAmf0String(v string) (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_String
-	r.Value = v
-	return r
-}
-func CreateAmf0Number(v float64) (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_Number
-	r.Value = v
-	return r
-}
-func CreateAmf0Boolean(v bool) (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_Boolean
-	r.Value = v
-	return r
-}
-func CreateAmf0Null() (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_Null
-	return r
-}
-func CreateAmf0Object(v *RtmpAmf0Object) (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_Object
-	r.Value = v
-	return r
-}
-func CreateAmf0EcmaArray(v *RtmpAmf0EcmaArray) (*RtmpAmf0Any) {
-	r := &RtmpAmf0Any{}
-	r.Maker = RTMP_AMF0_EcmaArray
-	r.Value = v
-	return r
+func ToAmf0(v interface {}) (*RtmpAmf0Any) {
+	switch t := v.(type) {
+	case bool:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_Boolean, Value:t }
+	case string:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_String, Value:t }
+	case int:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_Number, Value:float64(t) }
+	case float64:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_Number, Value:t }
+	case *RtmpAmf0Object:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_Object, Value:t }
+	case *RtmpAmf0EcmaArray:
+		return &RtmpAmf0Any{ Marker:RTMP_AMF0_EcmaArray, Value:t }
+	}
+	return nil
 }
 func (r *RtmpAmf0Any) Size() (int) {
 	switch {
-	case r.Maker == RTMP_AMF0_String:
+	case r.Marker == RTMP_AMF0_String:
 		v, _ := r.String()
 		return RtmpAmf0SizeString(v)
-	case r.Maker == RTMP_AMF0_Boolean:
+	case r.Marker == RTMP_AMF0_Boolean:
 		return RtmpAmf0SizeBoolean()
-	case r.Maker == RTMP_AMF0_Number:
+	case r.Marker == RTMP_AMF0_Number:
 		return RtmpAmf0SizeNumber()
-	case r.Maker == RTMP_AMF0_Null || r.Maker == RTMP_AMF0_Undefined:
+	case r.Marker == RTMP_AMF0_Null || r.Marker == RTMP_AMF0_Undefined:
 		return RtmpAmf0SizeNullOrUndefined()
-	case r.Maker == RTMP_AMF0_ObjectEnd:
+	case r.Marker == RTMP_AMF0_ObjectEnd:
 		return RtmpAmf0SizeObjectEOF()
-	case r.Maker == RTMP_AMF0_Object:
+	case r.Marker == RTMP_AMF0_Object:
 		v, _ := r.Object()
 		return v.Size()
-	case r.Maker == RTMP_AMF0_EcmaArray:
+	case r.Marker == RTMP_AMF0_EcmaArray:
 		v, _ := r.EcmaArray()
 		return v.Size()
 		// TODO: FIXME: implements it.
@@ -367,25 +349,25 @@ func (r *RtmpAmf0Any) Size() (int) {
 }
 func (r *RtmpAmf0Any) Write(codec *RtmpAmf0Codec) (err error) {
 	switch {
-	case r.Maker == RTMP_AMF0_String:
+	case r.Marker == RTMP_AMF0_String:
 		v, _ := r.String()
 		return codec.WriteString(v)
-	case r.Maker == RTMP_AMF0_Boolean:
+	case r.Marker == RTMP_AMF0_Boolean:
 		v, _ := r.Boolean()
 		return codec.WriteBoolean(v)
-	case r.Maker == RTMP_AMF0_Number:
+	case r.Marker == RTMP_AMF0_Number:
 		v, _ := r.Number()
 		return codec.WriteNumber(v)
-	case r.Maker == RTMP_AMF0_Null:
+	case r.Marker == RTMP_AMF0_Null:
 		return codec.WriteNull()
-	case r.Maker == RTMP_AMF0_Undefined:
+	case r.Marker == RTMP_AMF0_Undefined:
 		return codec.WriteUndefined()
-	case r.Maker == RTMP_AMF0_ObjectEnd:
+	case r.Marker == RTMP_AMF0_ObjectEnd:
 		return codec.WriteObjectEOF()
-	case r.Maker == RTMP_AMF0_Object:
+	case r.Marker == RTMP_AMF0_Object:
 		v, _ := r.Object()
 		return v.Write(codec)
-	case r.Maker == RTMP_AMF0_EcmaArray:
+	case r.Marker == RTMP_AMF0_EcmaArray:
 		v, _ := r.EcmaArray()
 		return v.Write(codec)
 		// TODO: FIXME: implements it.
@@ -398,25 +380,25 @@ func (r *RtmpAmf0Any) Read(codec *RtmpAmf0Codec) (err error) {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
 		return
 	}
-	r.Maker = codec.stream.ReadByte()
+	r.Marker = codec.stream.ReadByte()
 	codec.stream.Next(-1)
 
 	switch {
-	case r.Maker == RTMP_AMF0_String:
+	case r.Marker == RTMP_AMF0_String:
 		r.Value, err = codec.ReadString()
-	case r.Maker == RTMP_AMF0_Boolean:
+	case r.Marker == RTMP_AMF0_Boolean:
 		r.Value, err = codec.ReadBoolean()
-	case r.Maker == RTMP_AMF0_Number:
+	case r.Marker == RTMP_AMF0_Number:
 		r.Value, err = codec.ReadNumber()
-	case r.Maker == RTMP_AMF0_Null || r.Maker == RTMP_AMF0_Undefined || r.Maker == RTMP_AMF0_ObjectEnd:
+	case r.Marker == RTMP_AMF0_Null || r.Marker == RTMP_AMF0_Undefined || r.Marker == RTMP_AMF0_ObjectEnd:
 		codec.stream.Next(1)
-	case r.Maker == RTMP_AMF0_Object:
+	case r.Marker == RTMP_AMF0_Object:
 		r.Value, err = codec.ReadObject()
-	case r.Maker == RTMP_AMF0_EcmaArray:
+	case r.Marker == RTMP_AMF0_EcmaArray:
 		r.Value, err = codec.ReadEcmaArray()
 	// TODO: FIXME: implements it.
 	default:
-		err = RtmpError{code:ERROR_RTMP_AMF0_INVALID, desc:fmt.Sprintf("invalid amf0 message type. marker=%#x", r.Maker)}
+		err = RtmpError{code:ERROR_RTMP_AMF0_INVALID, desc:fmt.Sprintf("invalid amf0 message type. marker=%#x", r.Marker)}
 	}
 
 	return
@@ -425,34 +407,34 @@ func (r *RtmpAmf0Any) IsNil() (v bool) {
 	return r.Value == nil
 }
 func (r *RtmpAmf0Any) IsObjectEof() (v bool) {
-	return r.Maker == RTMP_AMF0_ObjectEnd
+	return r.Marker == RTMP_AMF0_ObjectEnd
 }
 func (r *RtmpAmf0Any) Object() (v *RtmpAmf0Object, ok bool) {
-	if r.Maker == RTMP_AMF0_Object {
+	if r.Marker == RTMP_AMF0_Object {
 		v, ok = r.Value.(*RtmpAmf0Object), true
 	}
 	return
 }
 func (r *RtmpAmf0Any) EcmaArray() (v *RtmpAmf0EcmaArray, ok bool) {
-	if r.Maker == RTMP_AMF0_EcmaArray {
+	if r.Marker == RTMP_AMF0_EcmaArray {
 		v, ok = r.Value.(*RtmpAmf0EcmaArray), true
 	}
 	return
 }
 func (r *RtmpAmf0Any) String() (v string, ok bool) {
-	if r.Maker == RTMP_AMF0_String {
+	if r.Marker == RTMP_AMF0_String {
 		v, ok = r.Value.(string), true
 	}
 	return
 }
 func (r *RtmpAmf0Any) Number() (v float64, ok bool) {
-	if r.Maker == RTMP_AMF0_Number {
+	if r.Marker == RTMP_AMF0_Number {
 		v, ok = r.Value.(float64), true
 	}
 	return
 }
 func (r *RtmpAmf0Any) Boolean() (v bool, ok bool) {
-	if r.Maker == RTMP_AMF0_Boolean {
+	if r.Marker == RTMP_AMF0_Boolean {
 		v, ok = r.Value.(bool), true
 	}
 	return

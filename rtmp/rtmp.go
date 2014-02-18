@@ -51,25 +51,25 @@ const RTMP_SIG_CLIENT_ID = "ASAICiss"
 /**
 * onStatus consts.
 */
-const StatusLevel = "level"
-const StatusCode = "code"
-const StatusDescription = "description"
-const StatusDetails = "details"
-const StatusClientId = "clientid"
+const SLEVEL = "level"
+const SCODE = "code"
+const SDESC = "description"
+const SDETAILS = "details"
+const SCLIENT_ID = "clientid"
 // status value
-const StatusLevelStatus = "status"
+const SLEVEL_Status = "status"
 // status error
-const StatusLevelError = "error"
+const SLEVEL_Error = "error"
 // code value
-const StatusCodeConnectSuccess = "NetConnection.Connect.Success"
-const StatusCodeConnectRejected = "NetConnection.Connect.Rejected"
-const StatusCodeStreamReset = "NetStream.Play.Reset"
-const StatusCodeStreamStart = "NetStream.Play.Start"
-const StatusCodeStreamPause = "NetStream.Pause.Notify"
-const StatusCodeStreamUnpause = "NetStream.Unpause.Notify"
-const StatusCodePublishStart = "NetStream.Publish.Start"
-const StatusCodeDataStart = "NetStream.Data.Start"
-const StatusCodeUnpublishSuccess = "NetStream.Unpublish.Success"
+const SCODE_ConnectSuccess = "NetConnection.Connect.Success"
+const SCODE_ConnectRejected = "NetConnection.Connect.Rejected"
+const SCODE_StreamReset = "NetStream.Play.Reset"
+const SCODE_StreamStart = "NetStream.Play.Start"
+const SCODE_StreamPause = "NetStream.Pause.Notify"
+const SCODE_StreamUnpause = "NetStream.Unpause.Notify"
+const SCODE_PublishStart = "NetStream.Publish.Start"
+const SCODE_DataStart = "NetStream.Data.Start"
+const SCODE_UnpublishSuccess = "NetStream.Unpublish.Success"
 
 // FMLE
 const RTMP_AMF0_COMMAND_ON_FC_PUBLISH = "onFCPublish"
@@ -254,18 +254,18 @@ func (r *rtmpServer) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error
 
 func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data map[string]string) (err error) {
 	data := NewRtmpAmf0EcmaArray()
-	data.Set("version", CreateAmf0String(RTMP_SIG_FMS_VER))
+	data.Set("version", ToAmf0(RTMP_SIG_FMS_VER))
 	if server_ip != "" {
-		data.Set("srs_server_ip", CreateAmf0String(server_ip))
+		data.Set("srs_server_ip", ToAmf0(server_ip))
 	}
 	for k, v := range extra_data {
-		data.Set(k, CreateAmf0String(v))
+		data.Set(k, ToAmf0(v))
 	}
 
 	var pkt *RtmpConnectAppResPacket = NewRtmpConnectAppResPacket()
-	pkt.PropsSet("fmsVer", CreateAmf0String("FMS/"+RTMP_SIG_FMS_VER)).PropsSet("capabilities", CreateAmf0Number(float64(127))).PropsSet("mode", CreateAmf0Number(1))
-	pkt.InfoSet(StatusLevel, CreateAmf0String(StatusLevelStatus)).InfoSet(StatusCode, CreateAmf0String(StatusCodeConnectSuccess)).InfoSet(StatusDescription, CreateAmf0String("Connection succeeded"))
-	pkt.InfoSet("objectEncoding", CreateAmf0Number(float64(req.ObjectEncoding))).InfoSet("data", CreateAmf0EcmaArray(data))
+	pkt.PropsSet("fmsVer", ToAmf0("FMS/"+RTMP_SIG_FMS_VER)).PropsSet("capabilities", ToAmf0(float64(127))).PropsSet("mode", ToAmf0(float64(1)))
+	pkt.InfoSet(SLEVEL, ToAmf0(SLEVEL_Status)).InfoSet(SCODE, ToAmf0(SCODE_ConnectSuccess)).InfoSet(SDESC, ToAmf0("Connection succeeded"))
+	pkt.InfoSet("objectEncoding", ToAmf0(float64(req.ObjectEncoding))).InfoSet("data", ToAmf0(data))
 
 	return r.protocol.SendPacket(pkt, uint32(0))
 }

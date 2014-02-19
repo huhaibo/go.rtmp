@@ -21,8 +21,6 @@
 
 package rtmp
 
-import "math"
-
 /**
 * high performance bytes buffer, read and write from zero.
  */
@@ -43,7 +41,7 @@ func (r *HPBuffer) String() string {
 	}
 	return string(r.buf[r.off:])
 }
-func (r *HPBuffer) Reset(n int) { r.off = int(math.Max(0, float64(n))) }
+func (r *HPBuffer) Reset() { r.off = 0 }
 func (r *HPBuffer) Len() (int) { return len(r.buf) - r.off }
 func (r *HPBuffer) Append(b []byte) (n int, err error) {
 	// TODO: FIXME: return err

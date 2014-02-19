@@ -160,7 +160,8 @@ const RTMP_FMT_TYPE3 = 3
 * independently for each direction.
 */
 const RTMP_DEFAULT_CHUNK_SIZE = 128
-const RTMP_MIN_CHUNK_SIZE = 2
+const RTMP_MIN_CHUNK_SIZE = 128
+const RTMP_MAX_CHUNK_SIZE = 65536
 
 /**
 * 6.1. Chunk Format

@@ -306,5 +306,60 @@ func (r *server) CallOnBWDone() (err error) {
 
 func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error) {
 	client_type = CLIENT_TYPE_Unknown
+	for {
+		var msg *Message
+		if msg, err = r.protocol.RecvMessage(); err != nil {
+			return
+		}
+
+		if !msg.Header.IsAmf0Command() && !msg.Header.IsAmf3Command() {
+			continue
+		}
+
+		var pkt interface {}
+		if pkt, err = r.protocol.DecodeMessage(msg); err != nil {
+			return
+		}
+
+		if pkt, ok := pkt.(*CreateStreamPacket); ok {
+			return r.identify_create_stream_client(pkt, stream_id_generator)
+		}
+	}
+	return
+}
+func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error) {
+	pkt := NewCreateStreamResPacket(req.TransactionId, float64(stream_id_generator.StreamId()))
+	if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+		return
+	}
+
+	for {
+		var msg *Message
+		if msg, err = r.protocol.RecvMessage(); err != nil {
+			return
+		}
+
+		if !msg.Header.IsAmf0Command() && !msg.Header.IsAmf3Command() {
+			continue
+		}
+
+		var pkt interface {}
+		if pkt, err = r.protocol.DecodeMessage(msg); err != nil {
+			return
+		}
+
+		if pkt, ok := pkt.(*PlayPacket); ok {
+			return r.identify_play_client(pkt)
+		}
+		if pkt, ok := pkt.(*PublishPacket); ok {
+			return r.identify_flash_publish_client(pkt)
+		}
+	}
+	return
+}
+func (r *server) identify_play_client(req *PlayPacket) (client_type int, stream_name string, err error) {
+	return
+}
+func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type int, stream_name string, err error) {
 	return
 }

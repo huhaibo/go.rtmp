@@ -83,8 +83,8 @@ func (r *Buffer) Empty() (bool) {
 }
 
 // reset the decode buffer, start from index n
-func (r *Buffer) Reset(n int) {
-	r.buffer.Reset(n)
+func (r *Buffer) Reset() {
+	r.buffer.Reset()
 }
 
 func (r *Buffer) Left() (int) {

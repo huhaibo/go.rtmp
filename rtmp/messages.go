@@ -25,6 +25,7 @@ import (
 	"net"
 	"math/rand"
 	"time"
+	"fmt"
 )
 
 /**
@@ -186,11 +187,11 @@ type Protocol interface {
 	* recv message from connection.
 	* the payload of message is []byte, user can decode it by DecodeMessage.
 	 */
-	//RecvMessage() (msg *Message, err error)
+	RecvMessage() (msg *Message, err error)
 	/**
 	* decode the received message to pkt.
 	 */
-	//DecodeMessage(msg *Message) (pkt interface {}, err error)
+	DecodeMessage(msg *Message) (pkt interface {}, err error)
 	/**
 	* expect specified message by v, where v must be a ptr,
 	* protocol stack will RecvMessage from connection and convert/set msg to v
@@ -242,18 +243,24 @@ type protocol struct {
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
 	conn *Socket
+	/**
+	* requests sent out, used to build the response.
+	* key: a float64 indicates the transactionId
+	* value: a string indicates the request command name
+	*/
+	requests map[float64]string
 // peer in
 	chunkStreams map[int]*ChunkStream
 	// the bytes read from underlayer tcp connection,
 	// used for parse to RTMP message or packets.
 	buffer *Buffer
 	// input chunk stream chunk size.
-	inChunkSize int32
+	inChunkSize uint32
 	// the acked size
 	inAckSize AckWindowSize
 // peer out
 	// output chunk stream chunk size.
-	outChunkSize int32
+	outChunkSize uint32
 	// bytes cache, size is RTMP_MAX_FMT0_HEADER_SIZE
 	outHeaderFmt0 []byte
 	// bytes cache, size is RTMP_MAX_FMT3_HEADER_SIZE
@@ -300,7 +307,7 @@ type Encoder interface {
 	 */
 	Encode(s *Buffer) (err error)
 }
-func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet interface {}, err error) {
+func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet interface {}, err error) {
 	var pkt Decoder= nil
 	var stream *Buffer = NewRtmpStream(payload)
 
@@ -308,7 +315,7 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 	if header.IsAmf0Command() || header.IsAmf3Command() || header.IsAmf0Data() || header.IsAmf3Data() {
 		// skip 1bytes to decode the amf3 command.
 		if header.IsAmf3Command() &&  stream.Requires(1) {
-			stream.Next(1)
+			stream = NewRtmpStream(payload[1:])
 		}
 
 		amf0_codec := NewAmf0Codec(stream)
@@ -322,23 +329,38 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 
 		// result/error packet
 		if command == AMF0_COMMAND_RESULT || command == AMF0_COMMAND_ERROR {
+			var transaction_id float64
+			if transaction_id, err = amf0_codec.ReadNumber(); err != nil {
+				return
+			}
+
+			// reset to zero to restart decode.
+			stream.Reset()
+
+			var request_name string
+			if request_name = r.HistoryRequestName(transaction_id); request_name == "" {
+				err = RtmpError{code:ERROR_RTMP_NO_REQUEST, desc:"decode AMF0/AMF3 transaction request failed"}
+				return
+			}
+
 			// TODO: FIXME: implements it
 		}
 
-		// reset to zero(amf3 to 1) to restart decode.
-		if header.IsAmf3Command() &&  stream.Requires(1) {
-			stream.Reset(1)
-		} else {
-			stream.Reset(0)
-		}
+		// reset to zero to restart decode.
+		stream.Reset()
 
 		// decode command object.
-		if command == AMF0_COMMAND_CONNECT {
+		switch command {
+		case AMF0_COMMAND_CONNECT:
 			pkt = NewConnectAppPacket()
+		case AMF0_COMMAND_CREATE_STREAM:
+			pkt = NewCreateStreamPacket()
 		}
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {
 		pkt =NewSetWindowAckSizePacket()
+	} else if header.IsSetChunkSize() {
+		pkt = NewSetChunkSizePacket()
 	}
 	// TODO: FIXME: implements it
 
@@ -361,7 +383,17 @@ type ConnectAppPacket struct {
 	CommandObject *Amf0Object
 }
 func NewConnectAppPacket() (*ConnectAppPacket) {
-	return &ConnectAppPacket{ TransactionId:float64(1.0) }
+	r := &ConnectAppPacket{}
+	r.TransactionId = float64(1.0)
+	r.CommandObject = NewAmf0Object()
+	return r
+}
+func (r *ConnectAppPacket) CmdSet(k string, v interface {}) (*ConnectAppPacket) {
+	// if empty or empty object, any value must has content.
+	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+		r.CommandObject.Set(k, a)
+	}
+	return r
 }
 // Decoder
 func (r *ConnectAppPacket) Decode(s *Buffer) (err error) {
@@ -371,26 +403,52 @@ func (r *ConnectAppPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName != AMF0_COMMAND_CONNECT {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_name failed."}
-		return
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CONNECT, r.CommandName)}
 	}
 
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
 	if r.TransactionId != 1.0 {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect transaction_id failed."}
-		return
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect transaction_id failed."}
 	}
 
 	if r.CommandObject, err = codec.ReadObject(); err != nil {
 		return
 	}
 	if r.CommandObject == nil {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_object failed."}
-		return
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_object failed."}
 	}
 
+	return
+}
+// Encoder
+func (r *ConnectAppPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *ConnectAppPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *ConnectAppPacket) GetSize() (v int) {
+	v = Amf0SizeString(r.CommandName)
+	v += Amf0SizeNumber()
+	v += r.CommandObject.Size()
+	return
+}
+func (r *ConnectAppPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if r.CommandObject.Size() > 0 {
+		if err = codec.WriteObject(r.CommandObject); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -502,6 +560,54 @@ func (r *SetWindowAckSizePacket) Encode(s *Buffer) (err error) {
 }
 
 /**
+* 7.1. Set Chunk Size
+* Protocol control message 1, Set Chunk Size, is used to notify the
+* peer about the new maximum chunk size.
+*/
+// @see: SrsSetChunkSizePacket
+type SetChunkSizePacket struct {
+	ChunkSize uint32
+}
+func NewSetChunkSizePacket() (*SetChunkSizePacket) {
+	r := &SetChunkSizePacket{}
+	r.ChunkSize = RTMP_DEFAULT_CHUNK_SIZE
+	return r
+}
+// Decoder
+func (r *SetChunkSizePacket) Decode(s *Buffer) (err error) {
+	if !s.Requires(4) {
+		err = RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode chunk size failed."}
+		return
+	}
+	r.ChunkSize = s.ReadUInt32()
+
+	if r.ChunkSize < RTMP_MIN_CHUNK_SIZE {
+		err = RtmpError{code:ERROR_RTMP_CHUNK_SIZE, desc:"atleast min chunk size."}
+	}
+	if r.ChunkSize > RTMP_MAX_CHUNK_SIZE {
+		err = RtmpError{code:ERROR_RTMP_CHUNK_SIZE, desc:"exceed max chunk size."}
+	}
+	return
+}
+// Encoder
+func (r *SetChunkSizePacket) GetPerferCid() (v int) {
+	return RTMP_CID_ProtocolControl
+}
+func (r *SetChunkSizePacket) GetMessageType() (v byte) {
+	return RTMP_MSG_SetChunkSize
+}
+func (r *SetChunkSizePacket) GetSize() (v int) {
+	return 4
+}
+func (r *SetChunkSizePacket) Encode(s *Buffer) (err error) {
+	if !s.Requires(4) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode chunk packet failed."}
+	}
+	s.WriteUInt32(r.ChunkSize)
+	return
+}
+
+/**
 * 5.6. Set Peer Bandwidth (6)
 * The client or the server sends this message to update the output
 * bandwidth of the peer.
@@ -538,7 +644,7 @@ func (r *SetPeerBandwidthPacket) Encode(s *Buffer) (err error) {
 type OnBWDonePacket struct {
 	CommandName string
 	TransactionId float64
-	Args *Amf0Any
+	Args *Amf0Any // Null
 }
 func NewOnBWDonePacket() (*OnBWDonePacket) {
 	r := &OnBWDonePacket{}
@@ -569,3 +675,323 @@ func (r *OnBWDonePacket) Encode(s *Buffer) (err error) {
 	}
 	return
 }
+
+/**
+* 4.1.3. createStream
+* The client sends this command to the server to create a logical
+* channel for message communication The publishing of audio, video, and
+* metadata is carried out over stream channel created using the
+* createStream command.
+*/
+// @see: SrsCreateStreamPacket
+type CreateStreamPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any
+}
+func NewCreateStreamPacket() (*CreateStreamPacket) {
+	r := &CreateStreamPacket{}
+	r.CommandName = AMF0_COMMAND_CREATE_STREAM
+	r.TransactionId = 2.0
+	r.CommandObject = ToAmf0Null()
+	return r
+}
+// Decoder
+func (r *CreateStreamPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_CREATE_STREAM {
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CREATE_STREAM, r.CommandName)}
+	}
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = codec.ReadNull(); err != nil {
+		return
+	}
+	return
+}
+// Encoder
+func (r *CreateStreamPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *CreateStreamPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *CreateStreamPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined()
+}
+func (r *CreateStreamPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = codec.WriteNull(); err != nil {
+		return
+	}
+	return
+}
+/**
+* response for SrsCreateStreamPacket.
+*/
+// @see: SrsCreateStreamResPacket
+type CreateStreamResPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+	StreamId float64
+}
+func NewCreateStreamResPacket(transaction_id float64, stream_id float64) (*CreateStreamResPacket) {
+	r := &CreateStreamResPacket{}
+	r.CommandName = AMF0_COMMAND_RESULT
+	r.TransactionId = transaction_id
+	r.CommandObject = ToAmf0Null()
+	r.StreamId = stream_id
+	return r
+}
+// Decoder
+func (r *CreateStreamResPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_RESULT {
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_RESULT, r.CommandName)}
+	}
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = codec.ReadNull(); err != nil {
+		return
+	}
+	if r.StreamId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	return
+}
+// Encoder
+func (r *CreateStreamResPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *CreateStreamResPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *CreateStreamResPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined() + Amf0SizeNumber()
+}
+func (r *CreateStreamResPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = codec.WriteNull(); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.StreamId); err != nil {
+		return
+	}
+	return
+}
+
+/**
+* 4.2.1. play
+* The client sends this command to the server to play a stream.
+*/
+// @see: SrsPlayPacket
+type PlayPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+	StreamName string
+	Start float64
+	Duration float64
+	Reset bool
+}
+func NewPlayPacket() (*PlayPacket) {
+	r := &PlayPacket{}
+	r.CommandName = AMF0_COMMAND_PLAY
+	r.CommandObject = ToAmf0Null()
+	r.Start = -2
+	r.Duration = -1
+	r.Reset = true
+	return r
+}
+// Decoder
+func (r *PlayPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_PLAY {
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PLAY, r.CommandName)}
+	}
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = codec.ReadNull(); err != nil {
+		return
+	}
+	if r.StreamName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if !s.Empty() {
+		if r.Start, err = codec.ReadNumber(); err != nil {
+			return
+		}
+	}
+	if !s.Empty() {
+		if r.Duration, err = codec.ReadNumber(); err != nil {
+			return
+		}
+	}
+
+	if s.Empty() {
+		return
+	}
+	var reset_value = Amf0Any{}
+	if err = reset_value.Read(codec); err != nil {
+		return
+	}
+	if v, ok := reset_value.Boolean(); ok {
+		r.Reset = v
+	} else if v, ok := reset_value.Number(); ok {
+		r.Reset = (v != 0)
+	} else {
+		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 invalid type, requires number or bool"}
+	}
+	return
+}
+// Encoder
+func (r *PlayPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverStream
+}
+func (r *PlayPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *PlayPacket) GetSize() (v int) {
+	v = Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined() + Amf0SizeString(r.StreamName)
+	v += Amf0SizeNumber() + Amf0SizeNumber() + Amf0SizeBoolean()
+	return
+}
+func (r *PlayPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = codec.WriteNull(); err != nil {
+		return
+	}
+	if err = codec.WriteString(r.StreamName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.Start); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.Duration); err != nil {
+		return
+	}
+	if err = codec.WriteBoolean(r.Reset); err != nil {
+		return
+	}
+	return
+}
+
+/**
+* FMLE/flash publish
+* 4.2.6. Publish
+* The client sends the publish command to publish a named stream to the
+* server. Using this name, any client can play this stream and receive
+* the published audio, video, and data messages.
+*/
+// @see: SrsPublishPacket
+type PublishPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+	StreamName string
+	// optional, default to live.
+	StreamType string
+}
+func NewPublishPacket() (*PublishPacket) {
+	r := &PublishPacket{}
+	r.CommandName = AMF0_COMMAND_PUBLISH
+	r.CommandObject = ToAmf0Null()
+	r.StreamType = "live"
+	return r
+}
+// Decoder
+func (r *PublishPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_PUBLISH {
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PUBLISH, r.CommandName)}
+	}
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = codec.ReadNull(); err != nil {
+		return
+	}
+	if r.StreamName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if !s.Empty() {
+		if r.StreamType, err = codec.ReadString(); err != nil {
+			return
+		}
+	}
+	return
+}
+// Encoder
+func (r *PublishPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverStream
+}
+func (r *PublishPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *PublishPacket) GetSize() (v int) {
+	v = Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined() + Amf0SizeString(r.StreamName)
+	v += Amf0SizeString(r.StreamType)
+	return
+}
+func (r *PublishPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = codec.WriteNull(); err != nil {
+		return
+	}
+	if err = codec.WriteString(r.StreamName); err != nil {
+		return
+	}
+	if err = codec.WriteString(r.StreamType); err != nil {
+		return
+	}
+	return
+}
+

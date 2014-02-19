@@ -168,7 +168,14 @@ func (r *protocol) SendPacket(pkt Encoder, stream_id uint32) (err error) {
 	}
 	msg.PerferCid = cid
 
-	return r.SendMessage(msg, stream_id)
+	if err = r.SendMessage(msg, stream_id); err != nil {
+		return
+	}
+
+	if err = r.on_send_message(pkt); err != nil {
+		return
+	}
+	return
 }
 
 func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
@@ -261,8 +268,21 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 	return
 }
 
-func (r *protocol) on_send_message(msg *Message) (err error) {
-	// TODO: FIXME: implements it
+func (r *protocol) on_send_message(pkt Encoder) (err error) {
+	if pkt, ok := pkt.(*SetChunkSizePacket); ok {
+		r.outChunkSize = pkt.ChunkSize
+		return
+	}
+
+	if pkt, ok := pkt.(*ConnectAppPacket); ok {
+		r.requests[pkt.TransactionId] = pkt.CommandName
+		return
+	}
+
+	if pkt, ok := pkt.(*CreateStreamPacket); ok {
+		r.requests[pkt.TransactionId] = pkt.CommandName
+		return
+	}
 	return
 }
 
@@ -280,15 +300,25 @@ func (r *protocol) on_recv_message(msg *Message) (err error) {
 		}
 	}
 
-	if msg.Header.IsWindowAcknowledgementSize() {
-		pkt := pkt.(*SetWindowAckSizePacket)
+	if pkt, ok := pkt.(*SetChunkSizePacket); ok {
+		r.inChunkSize = pkt.ChunkSize
+		return
+	}
+
+	if pkt, ok := pkt.(*SetWindowAckSizePacket); ok {
 		if pkt.AcknowledgementWindowSize > 0 {
 			r.inAckSize.ack_window_size = pkt.AcknowledgementWindowSize
 		}
+		return
 	}
 
 	// TODO: FIXME: implements it
 
+	return
+}
+
+func (r *protocol) HistoryRequestName(transaction_id float64) (request_name string) {
+	request_name, _ = r.requests[transaction_id]
 	return
 }
 

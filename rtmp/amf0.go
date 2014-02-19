@@ -421,7 +421,7 @@ func (r *Amf0Any) Read(codec *Amf0Codec) (err error) {
 	case r.Marker == AMF0_Number:
 		r.Value, err = codec.ReadNumber()
 	case r.Marker == AMF0_Null || r.Marker == AMF0_Undefined || r.Marker == AMF0_ObjectEnd:
-		codec.stream.Next(1)
+		codec.stream.ReadByte()
 	case r.Marker == AMF0_Object:
 		r.Value, err = codec.ReadObject()
 	case r.Marker == AMF0_EcmaArray:
@@ -652,6 +652,18 @@ func (r *Amf0Codec) WriteNull() (err error) {
 	r.stream.WriteByte(byte(AMF0_Null))
 
 	return
+}
+// srs_amf0_read_null
+func (r *Amf0Codec) ReadNull() (err error) {
+	// marker
+	if !r.stream.Requires(1) {
+		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 read null marker failed"}
+		return
+	}
+	r.stream.ReadByte()
+
+	return
+
 }
 // srs_amf0_read_undefined
 func (r *Amf0Codec) WriteUndefined() (err error) {

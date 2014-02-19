@@ -236,6 +236,7 @@ type Server interface {
 	 */
 	StartPlay(stream_id int) (err error)
 	StartFlashPublish(stream_id int) (err error)
+	StartFMLEPublish(stream_id int) (err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -443,5 +444,10 @@ func (r *server) StartFlashPublish(stream_id int) (err error) {
 			return
 		}
 	}
+	return
+}
+
+func (r *server) StartFMLEPublish(stream_id int) (err error) {
+	// FCPublish
 	return
 }

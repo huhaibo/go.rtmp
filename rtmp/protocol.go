@@ -609,3 +609,12 @@ func (r *MessageHeader) IsSetChunkSize() (bool) {
 func (r *MessageHeader) IsUserControlMessage() (bool) {
 	return r.MessageType == RTMP_MSG_UserControlMessage
 }
+func (r *MessageHeader) IsVideo() (bool) {
+	return r.MessageType == RTMP_MSG_VideoMessage
+}
+func (r *MessageHeader) IsAudio() (bool) {
+	return r.MessageType == RTMP_MSG_AudioMessage
+}
+func (r *MessageHeader) IsAggregate() (bool) {
+	return r.MessageType == RTMP_MSG_AggregateMessage
+}

@@ -232,9 +232,10 @@ type Server interface {
 	 */
 	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error)
 	/**
-	* start the play stream service engine
+	* start the play/publish stream service engine
 	 */
 	StartPlay(stream_id int) (err error)
+	StartFlashPublish(stream_id int) (err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -425,6 +426,19 @@ func (r *server) StartPlay(stream_id int) (err error) {
 	if true {
 		pkt := NewOnStatusDataPacket()
 		pkt.Set(SCODE, SCODE_DataStart)
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
+	return
+}
+
+func (r *server) StartFlashPublish(stream_id int) (err error) {
+	// publish response onStatus(NetStream.Publish.Start)
+	if true {
+		pkt := NewOnStatusCallPacket()
+		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.")
+		pkt.Set(SCLIENT_ID, SIG_CLIENT_ID)
 		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
 			return
 		}

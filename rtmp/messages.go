@@ -359,6 +359,8 @@ func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet in
 			pkt = NewPlayPacket()
 		case AMF0_COMMAND_PUBLISH:
 			pkt = NewPublishPacket()
+		case AMF0_COMMAND_CLOSE_STREAM:
+			pkt = NewCloseStreamPacket()
 		}
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {
@@ -1231,5 +1233,41 @@ func (r *OnStatusDataPacket) Encode(s *Buffer) (err error) {
 	if err = r.Data.Write(codec); err != nil {
 		return
 	}
+	return
+}
+
+/**
+* client close stream packet.
+*/
+// @see: SrsCloseStreamPacket
+type CloseStreamPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+}
+func NewCloseStreamPacket() (*CloseStreamPacket) {
+	r := &CloseStreamPacket{}
+	r.CommandName = AMF0_COMMAND_CLOSE_STREAM
+	r.CommandObject = NewAmf0Null()
+	return r
+}
+// Decoder
+func (r *CloseStreamPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName != AMF0_COMMAND_CLOSE_STREAM {
+		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CLOSE_STREAM, r.CommandName)}
+	}
+
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = r.CommandObject.Read(codec); err != nil {
+		return
+	}
+
 	return
 }

@@ -186,6 +186,10 @@ type RtmpStreamIdGenerator interface {
  */
 type Server interface {
 	/**
+	* get the underlayer protocol stack sdk.
+	 */
+	Protocol() (Protocol)
+	/**
 	* handshake with client, try complex handshake first, use simple if failed.
 	 */
 	Handshake() (err error)
@@ -243,6 +247,10 @@ func NewServer(conn *net.TCPConn) (Server, error) {
 
 type server struct {
 	protocol Protocol
+}
+
+func (r *server) Protocol() (Protocol) {
+	return r.protocol
 }
 
 func (r *server) Handshake() (err error) {

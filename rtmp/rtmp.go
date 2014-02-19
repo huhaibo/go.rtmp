@@ -77,10 +77,10 @@ const AMF0_COMMAND_ON_FC_UNPUBLISH = "onFCUnpublish"
 
 // type of client
 const (
-	CLIENT_TYPE_Unknown = iota
-	CLIENT_TYPE_Play
-	CLIENT_TYPE_FMLEPublish
-	CLIENT_TYPE_FlashPublish
+	CLIENT_TYPE_Unknown = "unknown"
+	CLIENT_TYPE_Play = "play"
+	CLIENT_TYPE_FMLEPublish = "fmle_publish"
+	CLIENT_TYPE_FlashPublish = "flash_publish"
 )
 
 /**
@@ -223,7 +223,7 @@ type Server interface {
 	* 		CLIENT_TYPE_FMLEPublish the client is publish client use FMLE schema, for example, the adobe FMLE
 	* 		CLIENT_TYPE_FlashPublish the client is publish client use Flash schema, for example, the Flash publish.
 	 */
-	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error)
+	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -304,7 +304,7 @@ func (r *server) CallOnBWDone() (err error) {
 	return r.protocol.SendPacket(pkt, uint32(0))
 }
 
-func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error) {
+func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error) {
 	client_type = CLIENT_TYPE_Unknown
 	for {
 		var msg *Message
@@ -327,7 +327,7 @@ func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (clie
 	}
 	return
 }
-func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error) {
+func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error) {
 	pkt := NewCreateStreamResPacket(req.TransactionId, float64(stream_id_generator.StreamId()))
 	if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
 		return
@@ -357,9 +357,13 @@ func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_i
 	}
 	return
 }
-func (r *server) identify_play_client(req *PlayPacket) (client_type int, stream_name string, err error) {
+func (r *server) identify_play_client(req *PlayPacket) (client_type string, stream_name string, err error) {
+	client_type = CLIENT_TYPE_Play
+	stream_name = req.StreamName
 	return
 }
-func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type int, stream_name string, err error) {
+func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type string, stream_name string, err error) {
+	client_type = CLIENT_TYPE_FlashPublish
+	stream_name = req.StreamName
 	return
 }

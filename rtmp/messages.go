@@ -355,6 +355,10 @@ func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet in
 			pkt = NewConnectAppPacket()
 		case AMF0_COMMAND_CREATE_STREAM:
 			pkt = NewCreateStreamPacket()
+		case AMF0_COMMAND_PLAY:
+			pkt = NewPlayPacket()
+		case AMF0_COMMAND_PUBLISH:
+			pkt = NewPublishPacket()
 		}
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {

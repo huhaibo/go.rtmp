@@ -181,22 +181,22 @@ const RTMP_EXTENDED_TIMESTAMP  = 0xFFFFFF
 /**
 * amf0 command message, command name macros
 */
-const RTMP_AMF0_COMMAND_CONNECT = "connect"
-const RTMP_AMF0_COMMAND_CREATE_STREAM = "createStream"
-const RTMP_AMF0_COMMAND_CLOSE_STREAM = "closeStream"
-const RTMP_AMF0_COMMAND_PLAY = "play"
-const RTMP_AMF0_COMMAND_PAUSE = "pause"
-const RTMP_AMF0_COMMAND_ON_BW_DONE = "onBWDone"
-const RTMP_AMF0_COMMAND_ON_STATUS = "onStatus"
-const RTMP_AMF0_COMMAND_RESULT = "_result"
-const RTMP_AMF0_COMMAND_ERROR = "_error"
-const RTMP_AMF0_COMMAND_RELEASE_STREAM = "releaseStream"
-const RTMP_AMF0_COMMAND_FC_PUBLISH = "FCPublish"
-const RTMP_AMF0_COMMAND_UNPUBLISH = "FCUnpublish"
-const RTMP_AMF0_COMMAND_PUBLISH = "publish"
-const RTMP_AMF0_DATA_SAMPLE_ACCESS = "|RtmpSampleAccess"
-const RTMP_AMF0_DATA_SET_DATAFRAME = "@setDataFrame"
-const RTMP_AMF0_DATA_ON_METADATA = "onMetaData"
+const AMF0_COMMAND_CONNECT = "connect"
+const AMF0_COMMAND_CREATE_STREAM = "createStream"
+const AMF0_COMMAND_CLOSE_STREAM = "closeStream"
+const AMF0_COMMAND_PLAY = "play"
+const AMF0_COMMAND_PAUSE = "pause"
+const AMF0_COMMAND_ON_BW_DONE = "onBWDone"
+const AMF0_COMMAND_ON_STATUS = "onStatus"
+const AMF0_COMMAND_RESULT = "_result"
+const AMF0_COMMAND_ERROR = "_error"
+const AMF0_COMMAND_RELEASE_STREAM = "releaseStream"
+const AMF0_COMMAND_FC_PUBLISH = "FCPublish"
+const AMF0_COMMAND_UNPUBLISH = "FCUnpublish"
+const AMF0_COMMAND_PUBLISH = "publish"
+const AMF0_DATA_SAMPLE_ACCESS = "|RtmpSampleAccess"
+const AMF0_DATA_SET_DATAFRAME = "@setDataFrame"
+const AMF0_DATA_ON_METADATA = "onMetaData"
 
 /**
 * band width check method name, which will be invoked by client.

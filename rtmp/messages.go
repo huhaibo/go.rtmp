@@ -216,7 +216,7 @@ type Protocol interface {
 func NewProtocol(conn *net.TCPConn) (Protocol, error) {
 	r := &protocol{}
 
-	r.conn = NewRtmpSocket(conn)
+	r.conn = NewSocket(conn)
 	r.chunkStreams = map[int]*ChunkStream{}
 	r.buffer = NewRtmpBuffer(r.conn)
 	r.handshake = &Handshake{}
@@ -241,7 +241,7 @@ type protocol struct {
 	handshake *Handshake
 // peer in/out
 	// the underlayer tcp connection, to read/write bytes from/to.
-	conn *RtmpSocket
+	conn *Socket
 // peer in
 	chunkStreams map[int]*ChunkStream
 	// the bytes read from underlayer tcp connection,
@@ -311,7 +311,7 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 			stream.Next(1)
 		}
 
-		amf0_codec := NewRtmpAmf0Codec(stream)
+		amf0_codec := NewAmf0Codec(stream)
 
 		// amf0 command message.
 		// need to read the command name.
@@ -321,7 +321,7 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 		}
 
 		// result/error packet
-		if command == RTMP_AMF0_COMMAND_RESULT || command == RTMP_AMF0_COMMAND_ERROR {
+		if command == AMF0_COMMAND_RESULT || command == AMF0_COMMAND_ERROR {
 			// TODO: FIXME: implements it
 		}
 
@@ -333,7 +333,7 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 		}
 
 		// decode command object.
-		if command == RTMP_AMF0_COMMAND_CONNECT {
+		if command == AMF0_COMMAND_CONNECT {
 			pkt = NewConnectAppPacket()
 		}
 		// TODO: FIXME: implements it
@@ -358,19 +358,19 @@ func DecodePacket(r Protocol, header *MessageHeader, payload []byte) (packet int
 type ConnectAppPacket struct {
 	CommandName string
 	TransactionId float64
-	CommandObject *RtmpAmf0Object
+	CommandObject *Amf0Object
 }
 func NewConnectAppPacket() (*ConnectAppPacket) {
 	return &ConnectAppPacket{ TransactionId:float64(1.0) }
 }
 // Decoder
 func (r *ConnectAppPacket) Decode(s *Buffer) (err error) {
-	codec := NewRtmpAmf0Codec(s)
+	codec := NewAmf0Codec(s)
 
 	if r.CommandName, err = codec.ReadString(); err != nil {
 		return
 	}
-	if r.CommandName != RTMP_AMF0_COMMAND_CONNECT {
+	if r.CommandName != AMF0_COMMAND_CONNECT {
 		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_name failed."}
 		return
 	}
@@ -401,15 +401,15 @@ func (r *ConnectAppPacket) Decode(s *Buffer) (err error) {
 type ConnectAppResPacket struct {
 	CommandName string
 	TransactionId float64
-	Props *RtmpAmf0Object
-	Info *RtmpAmf0Object
+	Props *Amf0Object
+	Info *Amf0Object
 }
 func NewConnectAppResPacket() (*ConnectAppResPacket) {
 	r := &ConnectAppResPacket{}
-	r.CommandName = RTMP_AMF0_COMMAND_RESULT
+	r.CommandName = AMF0_COMMAND_RESULT
 	r.TransactionId = float64(1.0)
-	r.Props = NewRtmpAmf0Object()
-	r.Info = NewRtmpAmf0Object()
+	r.Props = NewAmf0Object()
+	r.Info = NewAmf0Object()
 	return r
 }
 func (r *ConnectAppResPacket) PropsSet(k string, v interface {}) (*ConnectAppResPacket) {
@@ -434,14 +434,14 @@ func (r *ConnectAppResPacket) GetMessageType() (v byte) {
 	return RTMP_MSG_AMF0CommandMessage
 }
 func (r *ConnectAppResPacket) GetSize() (v int) {
-	v = RtmpAmf0SizeString(r.CommandName)
-	v += RtmpAmf0SizeNumber()
+	v = Amf0SizeString(r.CommandName)
+	v += Amf0SizeNumber()
 	v += r.Props.Size()
 	v += r.Info.Size()
 	return
 }
 func (r *ConnectAppResPacket) Encode(s *Buffer) (err error) {
-	codec := NewRtmpAmf0Codec(s)
+	codec := NewAmf0Codec(s)
 
 	if err = codec.WriteString(r.CommandName); err != nil {
 		return
@@ -538,11 +538,11 @@ func (r *SetPeerBandwidthPacket) Encode(s *Buffer) (err error) {
 type OnBWDonePacket struct {
 	CommandName string
 	TransactionId float64
-	Args *RtmpAmf0Any
+	Args *Amf0Any
 }
 func NewOnBWDonePacket() (*OnBWDonePacket) {
 	r := &OnBWDonePacket{}
-	r.CommandName = RTMP_AMF0_COMMAND_ON_BW_DONE
+	r.CommandName = AMF0_COMMAND_ON_BW_DONE
 	r.Args = ToAmf0Null()
 	return r
 }
@@ -554,10 +554,10 @@ func (r *OnBWDonePacket) GetMessageType() (v byte) {
 	return RTMP_MSG_AMF0CommandMessage
 }
 func (r *OnBWDonePacket) GetSize() (v int) {
-	return RtmpAmf0SizeString(r.CommandName) + RtmpAmf0SizeNumber() + RtmpAmf0SizeNullOrUndefined()
+	return Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined()
 }
 func (r *OnBWDonePacket) Encode(s *Buffer) (err error) {
-	codec := NewRtmpAmf0Codec(s)
+	codec := NewAmf0Codec(s)
 	if err = codec.WriteString(r.CommandName); err != nil {
 		return
 	}

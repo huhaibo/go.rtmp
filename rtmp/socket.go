@@ -27,26 +27,26 @@ import (
 )
 
 // socket to read or write data.
-type RtmpSocket struct {
+type Socket struct {
 	conn *net.TCPConn
 	recv_bytes uint64
 	send_bytes uint64
 }
-func NewRtmpSocket(conn *net.TCPConn) (*RtmpSocket) {
-	r := &RtmpSocket{}
+func NewSocket(conn *net.TCPConn) (*Socket) {
+	r := &Socket{}
 	r.conn = conn
 	return r
 }
 
-func (r *RtmpSocket) RecvBytes() (uint64) {
+func (r *Socket) RecvBytes() (uint64) {
 	return r.recv_bytes
 }
 
-func (r *RtmpSocket) SendBytes() (uint64) {
+func (r *Socket) SendBytes() (uint64) {
 	return r.send_bytes
 }
 
-func (r *RtmpSocket) Read(b []byte) (n int, err error) {
+func (r *Socket) Read(b []byte) (n int, err error) {
 	n, err = r.conn.Read(b)
 
 	if n > 0 {
@@ -56,7 +56,7 @@ func (r *RtmpSocket) Read(b []byte) (n int, err error) {
 	return
 }
 
-func (r *RtmpSocket) Write(b []byte) (n int, err error) {
+func (r *Socket) Write(b []byte) (n int, err error) {
 	n, err = r.conn.Write(b)
 
 	if n > 0 {

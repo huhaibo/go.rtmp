@@ -31,9 +31,9 @@ type Buffer struct{
 	// high performance buffer, to read/write from zero.
 	buffer *HPBuffer
 	// to read bytes and append to buffer.
-	conn *RtmpSocket
+	conn *Socket
 }
-func NewRtmpBuffer(conn *RtmpSocket) (*Buffer) {
+func NewRtmpBuffer(conn *Socket) (*Buffer) {
 	r := &Buffer{}
 	r.conn = conn
 	r.buffer = &HPBuffer{}

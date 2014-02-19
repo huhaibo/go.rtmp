@@ -280,7 +280,7 @@ func (r *server) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error) {
 }
 
 func (r *server) ReponseConnectApp(req *Request, server_ip string, extra_data []map[string]string) (err error) {
-	data := NewRtmpAmf0EcmaArray()
+	data := NewAmf0EcmaArray()
 	data.Set("version", ToAmf0(SIG_FMS_VER))
 	if server_ip != "" {
 		data.Set("srs_server_ip", ToAmf0(server_ip))

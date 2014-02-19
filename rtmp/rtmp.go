@@ -116,6 +116,9 @@ func NewRequest() (*Request) {
 	return r
 }
 
+func (r *Request) StreamUrl() (string) {
+	return fmt.Sprintf("%v/%v/%v", r.Vhost, r.App, r.Stream)
+}
 func (r *Request) discovery_app() (err error) {
 	// parse ...vhost... to ?vhost=
 	var v string = r.TcUrl
@@ -224,6 +227,10 @@ type Server interface {
 	* 		CLIENT_TYPE_FlashPublish the client is publish client use Flash schema, for example, the Flash publish.
 	 */
 	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error)
+	/**
+	* start the play stream service engine
+	 */
+	StartPlay(stream_id int) (err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -324,6 +331,7 @@ func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (clie
 		if pkt, ok := pkt.(*CreateStreamPacket); ok {
 			return r.identify_create_stream_client(pkt, stream_id_generator)
 		}
+		// TODO: FIXME: implements it.
 	}
 	return
 }
@@ -365,5 +373,9 @@ func (r *server) identify_play_client(req *PlayPacket) (client_type string, stre
 func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type string, stream_name string, err error) {
 	client_type = CLIENT_TYPE_FlashPublish
 	stream_name = req.StreamName
+	return
+}
+
+func (r *server) StartPlay(stream_id int) (err error) {
 	return
 }

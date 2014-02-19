@@ -363,6 +363,8 @@ func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet in
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {
 		pkt =NewSetWindowAckSizePacket()
+	} else if header.IsUserControlMessage() {
+		pkt = NewUserControlPacket()
 	} else if header.IsSetChunkSize() {
 		pkt = NewSetChunkSizePacket()
 	}
@@ -392,9 +394,9 @@ func NewConnectAppPacket() (*ConnectAppPacket) {
 	r.CommandObject = NewAmf0Object()
 	return r
 }
-func (r *ConnectAppPacket) CmdSet(k string, v interface {}) (*ConnectAppPacket) {
+func (r *ConnectAppPacket) Set(k string, v interface {}) (*ConnectAppPacket) {
 	// if empty or empty object, any value must has content.
-	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+	if a := NewAmf0(v); a != nil && a.Size() > 0 {
 		r.CommandObject.Set(k, a)
 	}
 	return r
@@ -476,14 +478,14 @@ func NewConnectAppResPacket() (*ConnectAppResPacket) {
 }
 func (r *ConnectAppResPacket) PropsSet(k string, v interface {}) (*ConnectAppResPacket) {
 	// if empty or empty object, any value must has content.
-	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+	if a := NewAmf0(v); a != nil && a.Size() > 0 {
 		r.Props.Set(k, a)
 	}
 	return r
 }
 func (r *ConnectAppResPacket) InfoSet(k string, v interface {}) (*ConnectAppResPacket) {
 	// if empty or empty object, any value must has content.
-	if a := ToAmf0(v); a != nil && a.Size() > 0 {
+	if a := NewAmf0(v); a != nil && a.Size() > 0 {
 		r.Info.Set(k, a)
 	}
 	return r
@@ -653,7 +655,7 @@ type OnBWDonePacket struct {
 func NewOnBWDonePacket() (*OnBWDonePacket) {
 	r := &OnBWDonePacket{}
 	r.CommandName = AMF0_COMMAND_ON_BW_DONE
-	r.Args = ToAmf0Null()
+	r.Args = NewAmf0Null()
 	return r
 }
 // Encoder
@@ -674,7 +676,7 @@ func (r *OnBWDonePacket) Encode(s *Buffer) (err error) {
 	if err = codec.WriteNumber(r.TransactionId); err != nil {
 		return
 	}
-	if err = codec.WriteNull(); err != nil {
+	if err = r.Args.Write(codec); err != nil {
 		return
 	}
 	return
@@ -691,13 +693,13 @@ func (r *OnBWDonePacket) Encode(s *Buffer) (err error) {
 type CreateStreamPacket struct {
 	CommandName string
 	TransactionId float64
-	CommandObject *Amf0Any
+	CommandObject *Amf0Any // Null
 }
 func NewCreateStreamPacket() (*CreateStreamPacket) {
 	r := &CreateStreamPacket{}
 	r.CommandName = AMF0_COMMAND_CREATE_STREAM
 	r.TransactionId = 2.0
-	r.CommandObject = ToAmf0Null()
+	r.CommandObject = NewAmf0Null()
 	return r
 }
 // Decoder
@@ -713,7 +715,7 @@ func (r *CreateStreamPacket) Decode(s *Buffer) (err error) {
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
-	if err = codec.ReadNull(); err != nil {
+	if err = r.CommandObject.Read(codec); err != nil {
 		return
 	}
 	return
@@ -737,7 +739,7 @@ func (r *CreateStreamPacket) Encode(s *Buffer) (err error) {
 	if err = codec.WriteNumber(r.TransactionId); err != nil {
 		return
 	}
-	if err = codec.WriteNull(); err != nil {
+	if err = r.CommandObject.Write(codec); err != nil {
 		return
 	}
 	return
@@ -756,7 +758,7 @@ func NewCreateStreamResPacket(transaction_id float64, stream_id float64) (*Creat
 	r := &CreateStreamResPacket{}
 	r.CommandName = AMF0_COMMAND_RESULT
 	r.TransactionId = transaction_id
-	r.CommandObject = ToAmf0Null()
+	r.CommandObject = NewAmf0Null()
 	r.StreamId = stream_id
 	return r
 }
@@ -773,7 +775,7 @@ func (r *CreateStreamResPacket) Decode(s *Buffer) (err error) {
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
-	if err = codec.ReadNull(); err != nil {
+	if err = r.CommandObject.Read(codec); err != nil {
 		return
 	}
 	if r.StreamId, err = codec.ReadNumber(); err != nil {
@@ -800,7 +802,7 @@ func (r *CreateStreamResPacket) Encode(s *Buffer) (err error) {
 	if err = codec.WriteNumber(r.TransactionId); err != nil {
 		return
 	}
-	if err = codec.WriteNull(); err != nil {
+	if err = r.CommandObject.Write(codec); err != nil {
 		return
 	}
 	if err = codec.WriteNumber(r.StreamId); err != nil {
@@ -826,7 +828,7 @@ type PlayPacket struct {
 func NewPlayPacket() (*PlayPacket) {
 	r := &PlayPacket{}
 	r.CommandName = AMF0_COMMAND_PLAY
-	r.CommandObject = ToAmf0Null()
+	r.CommandObject = NewAmf0Null()
 	r.Start = -2
 	r.Duration = -1
 	r.Reset = true
@@ -845,7 +847,7 @@ func (r *PlayPacket) Decode(s *Buffer) (err error) {
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
-	if err = codec.ReadNull(); err != nil {
+	if err = r.CommandObject.Read(codec); err != nil {
 		return
 	}
 	if r.StreamName, err = codec.ReadString(); err != nil {
@@ -899,7 +901,7 @@ func (r *PlayPacket) Encode(s *Buffer) (err error) {
 	if err = codec.WriteNumber(r.TransactionId); err != nil {
 		return
 	}
-	if err = codec.WriteNull(); err != nil {
+	if err = r.CommandObject.Write(codec); err != nil {
 		return
 	}
 	if err = codec.WriteString(r.StreamName); err != nil {
@@ -936,7 +938,7 @@ type PublishPacket struct {
 func NewPublishPacket() (*PublishPacket) {
 	r := &PublishPacket{}
 	r.CommandName = AMF0_COMMAND_PUBLISH
-	r.CommandObject = ToAmf0Null()
+	r.CommandObject = NewAmf0Null()
 	r.StreamType = "live"
 	return r
 }
@@ -953,7 +955,7 @@ func (r *PublishPacket) Decode(s *Buffer) (err error) {
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
-	if err = codec.ReadNull(); err != nil {
+	if err = r.CommandObject.Read(codec); err != nil {
 		return
 	}
 	if r.StreamName, err = codec.ReadString(); err != nil {
@@ -987,7 +989,7 @@ func (r *PublishPacket) Encode(s *Buffer) (err error) {
 	if err = codec.WriteNumber(r.TransactionId); err != nil {
 		return
 	}
-	if err = codec.WriteNull(); err != nil {
+	if err = r.CommandObject.Write(codec); err != nil {
 		return
 	}
 	if err = codec.WriteString(r.StreamName); err != nil {
@@ -999,3 +1001,235 @@ func (r *PublishPacket) Encode(s *Buffer) (err error) {
 	return
 }
 
+
+// 3.7. User Control message
+// @see: SrcPCUCEventType
+const(
+	// generally, 4bytes event-data
+	PCUCStreamBegin = iota
+	PCUCStreamEOF
+	PCUCStreamDry
+	PCUCSetBufferLength // 8bytes event-data
+	PCUCStreamIsRecorded
+	PCUCPingRequest
+	PCUCPingResponse
+)
+/**
+* for the EventData is 4bytes.
+* Stream Begin(=0)			4-bytes stream ID
+* Stream EOF(=1)			4-bytes stream ID
+* StreamDry(=2)				4-bytes stream ID
+* SetBufferLength(=3)		8-bytes 4bytes stream ID, 4bytes buffer length.
+* StreamIsRecorded(=4)		4-bytes stream ID
+* PingRequest(=6)			4-bytes timestamp local server time
+* PingResponse(=7)			4-bytes timestamp received ping request.
+*
+* 3.7. User Control message
+* +------------------------------+-------------------------
+* | Event Type ( 2- bytes ) | Event Data
+* +------------------------------+-------------------------
+* Figure 5 Pay load for the ‘User Control Message’.
+*/
+// @see: SrsUserControlPacket
+type UserControlPacket struct {
+	// @see: SrcPCUCEventType
+	// for example, PCUCStreamBegin
+	EventType uint16
+	EventData uint32
+	/**
+	* 4bytes if event_type is SetBufferLength; otherwise 0.
+	*/
+	ExtraData uint32
+}
+func NewUserControlPacket() (*UserControlPacket) {
+	r := &UserControlPacket{}
+	return r
+}
+// Decoder
+func (r *UserControlPacket) Decode(s *Buffer) (err error) {
+	if !s.Requires(6) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode user control failed"}
+	}
+
+	r.EventType = s.ReadUInt16()
+	r.EventData = s.ReadUInt32()
+
+	if r.EventType != PCUCSetBufferLength {
+		return
+	}
+
+	if !s.Requires(4) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode PCUC set buffer length failed"}
+	}
+	r.ExtraData = s.ReadUInt32()
+	return
+}
+// Encoder
+func (r *UserControlPacket) GetPerferCid() (v int) {
+	return RTMP_CID_ProtocolControl
+}
+func (r *UserControlPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_UserControlMessage
+}
+func (r *UserControlPacket) GetSize() (v int) {
+	if r.EventType == PCUCSetBufferLength {
+		return 2 + 4 + 4
+	} else {
+		return 2 + 4
+	}
+}
+func (r *UserControlPacket) Encode(s *Buffer) (err error) {
+	if !s.Requires(6) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode user control failed"}
+	}
+	s.WriteUInt16(r.EventType).WriteUInt32(r.EventData)
+
+	// when event type is set buffer length,
+	// write the extra buffer length.
+	if r.EventType != PCUCSetBufferLength {
+		return
+	}
+
+	if !s.Requires(4) {
+		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode PCUC set buffer length failed"}
+	}
+	s.WriteUInt32(r.ExtraData)
+	return
+}
+
+/**
+* onStatus command, AMF0 Call
+* @remark, user must set the stream_id by SrsMessage.set_packet().
+*/
+// @see: SrsOnStatusCallPacket
+type OnStatusCallPacket struct {
+	CommandName string
+	TransactionId float64
+	Args *Amf0Any // Null
+	Data *Amf0Object
+}
+func NewOnStatusCallPacket() (*OnStatusCallPacket) {
+	r := &OnStatusCallPacket{}
+	r.CommandName = AMF0_COMMAND_ON_STATUS
+	r.Args = NewAmf0Null()
+	r.Data = NewAmf0Object()
+	return r
+}
+func (r *OnStatusCallPacket) Set(k string, v interface {}) (*OnStatusCallPacket) {
+	// if empty or empty object, any value must has content.
+	if a := NewAmf0(v); a != nil && a.Size() > 0 {
+		r.Data.Set(k, a)
+	}
+	return r
+}
+// Encoder
+func (r *OnStatusCallPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverStream
+}
+func (r *OnStatusCallPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *OnStatusCallPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + Amf0SizeNumber() + Amf0SizeNullOrUndefined() + r.Data.Size()
+}
+func (r *OnStatusCallPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = r.Args.Write(codec); err != nil {
+		return
+	}
+	if err = r.Data.Write(codec); err != nil {
+		return
+	}
+	return
+}
+
+/**
+* AMF0Data RtmpSampleAccess
+* @remark, user must set the stream_id by SrsMessage.set_packet().
+*/
+// @see: SrsSampleAccessPacket
+type SampleAccessPacket struct {
+	CommandName string
+	VideoSampleAccess bool
+	AudioSampleAccess bool
+}
+func NewSampleAccessPacket() (*SampleAccessPacket) {
+	r := &SampleAccessPacket{}
+	r.CommandName = AMF0_DATA_SAMPLE_ACCESS
+	return r
+}
+// Encoder
+func (r *SampleAccessPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverStream
+}
+func (r *SampleAccessPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0DataMessage
+}
+func (r *SampleAccessPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + Amf0SizeBoolean() + Amf0SizeBoolean()
+}
+func (r *SampleAccessPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteBoolean(r.VideoSampleAccess); err != nil {
+		return
+	}
+	if err = codec.WriteBoolean(r.AudioSampleAccess); err != nil {
+		return
+	}
+	return
+}
+
+/**
+* onStatus data, AMF0 Data
+* @remark, user must set the stream_id by SrsMessage.set_packet().
+*/
+// @see: SrsOnStatusDataPacket
+type OnStatusDataPacket struct {
+	CommandName string
+	Data *Amf0Object
+}
+func NewOnStatusDataPacket() (*OnStatusDataPacket) {
+	r := &OnStatusDataPacket{}
+	r.CommandName = AMF0_COMMAND_ON_STATUS
+	r.Data = NewAmf0Object()
+	return r
+}
+func (r *OnStatusDataPacket) Set(k string, v interface {}) (*OnStatusDataPacket) {
+	// if empty or empty object, any value must has content.
+	if a := NewAmf0(v); a != nil && a.Size() > 0 {
+		r.Data.Set(k, a)
+	}
+	return r
+}
+// Encoder
+func (r *OnStatusDataPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverStream
+}
+func (r *OnStatusDataPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0DataMessage
+}
+func (r *OnStatusDataPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + r.Data.Size()
+}
+func (r *OnStatusDataPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = r.Data.Write(codec); err != nil {
+		return
+	}
+	return
+}

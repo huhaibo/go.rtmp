@@ -327,14 +327,14 @@ func (r *Amf0EcmaArray) GetPropertyNumber(k string) (v float64, ok bool) {
 * 		| null-marker | undefined-marker | reference-type | ecma-array-type
 * 		| strict-array-type | date-type | long-string-type | xml-document-type
 * 		| typed-object-type
-* create any with ToAmf0(), or create a default one and Read from stream.
+* create any with NewAmf0(), or create a default one and Read from stream.
 */
 // @see: SrsAmf0Any
 type Amf0Any struct {
 	Marker byte
 	Value interface {}
 }
-func ToAmf0(v interface {}) (*Amf0Any) {
+func NewAmf0(v interface {}) (*Amf0Any) {
 	switch t := v.(type) {
 	case bool:
 		return &Amf0Any{ Marker:AMF0_Boolean, Value:t }
@@ -351,7 +351,7 @@ func ToAmf0(v interface {}) (*Amf0Any) {
 	}
 	return nil
 }
-func ToAmf0Null() (*Amf0Any) {
+func NewAmf0Null() (*Amf0Any) {
 	return &Amf0Any{ Marker:AMF0_Null }
 }
 func (r *Amf0Any) Size() (int) {

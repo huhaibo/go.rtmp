@@ -288,13 +288,13 @@ func (r *server) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error) {
 
 func (r *server) ReponseConnectApp(req *Request, server_ip string, extra_data []map[string]string) (err error) {
 	data := NewAmf0EcmaArray()
-	data.Set("version", ToAmf0(SIG_FMS_VER))
+	data.Set("version", NewAmf0(SIG_FMS_VER))
 	if server_ip != "" {
-		data.Set("srs_server_ip", ToAmf0(server_ip))
+		data.Set("srs_server_ip", NewAmf0(server_ip))
 	}
 	for _, item := range extra_data {
 		for k, v := range item {
-			data.Set(k, ToAmf0(v))
+			data.Set(k, NewAmf0(v))
 		}
 	}
 
@@ -377,5 +377,49 @@ func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type 
 }
 
 func (r *server) StartPlay(stream_id int) (err error) {
+	// StreamBegin
+	if true {
+		pkt := &UserControlPacket{EventType:PCUCStreamBegin, EventData:uint32(stream_id)}
+		if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+			return
+		}
+	}
+
+	// onStatus(NetStream.Play.Reset)
+	if true {
+		pkt := NewOnStatusCallPacket()
+		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_StreamReset).Set(SDESC, "Playing and resetting stream.")
+		pkt.Set(SDETAILS, "stream").Set(SCLIENT_ID, SIG_CLIENT_ID)
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
+
+	// onStatus(NetStream.Play.Start)
+	if true {
+		pkt := NewOnStatusCallPacket()
+		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_StreamStart).Set(SDESC, "Started playing stream.")
+		pkt.Set(SDETAILS, "stream").Set(SCLIENT_ID, SIG_CLIENT_ID)
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
+
+	// |RtmpSampleAccess(false, false)
+	if true {
+		pkt := NewSampleAccessPacket()
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
+
+	// onStatus(NetStream.Data.Start)
+	if true {
+		pkt := NewOnStatusDataPacket()
+		pkt.Set(SCODE, SCODE_DataStart)
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
 	return
 }

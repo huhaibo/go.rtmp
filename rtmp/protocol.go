@@ -27,7 +27,7 @@ import (
 )
 
 // should ack the read, ack to peer
-func (r *RtmpAckWindowSize) ShouldAckRead(n uint64) (bool) {
+func (r *AckWindowSize) ShouldAckRead(n uint64) (bool) {
 	if r.ack_window_size <= 0 {
 		return false
 	}
@@ -40,7 +40,7 @@ func (r *RtmpAckWindowSize) ShouldAckRead(n uint64) (bool) {
 * the payload is not decoded, use srs_rtmp_expect_message<T> if requires
 * specifies message.
 */
-func (r *rtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
+func (r *protocol) RecvMessage() (msg *Message, err error) {
 	for {
 		if msg, err = r.recv_interlaced_message(); err != nil {
 			return
@@ -71,23 +71,23 @@ func (r *rtmpProtocol) RecvMessage() (msg *RtmpMessage, err error) {
 * decode the message, return the decoded rtmp packet.
  */
 // @see: SrsCommonMessage.decode_packet(SrsProtocol* protocol)
-func (r *rtmpProtocol) DecodeMessage(msg *RtmpMessage) (pkt interface {}, err error) {
+func (r *protocol) DecodeMessage(msg *Message) (pkt interface {}, err error) {
 	if msg == nil || msg.Payload == nil {
 		return
 	}
 
-	pkt, err = DecodeRtmpPacket(r, msg.Header, msg.Payload)
+	pkt, err = DecodePacket(r, msg.Header, msg.Payload)
 	return
 }
 
 /**
 * expect a specified message by v, drop others util got specified one.
 * for example:
-* 		var pkt *RtmpConnectAppPacket
+* 		var pkt *ConnectAppPacket
 *		_, err = r.protocol.ExpectMessage(&pkt)
 * 		// use the decoded pkt contains the connect app info.
 */
-func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err error) {
+func (r *protocol) ExpectMessage(v interface {}) (msg *Message, err error) {
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 	if rv.Kind() != reflect.Ptr {
@@ -135,8 +135,8 @@ func (r *rtmpProtocol) ExpectMessage(v interface {}) (msg *RtmpMessage, err erro
 	return
 }
 
-func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage, err error) {
-	msg = NewRtmpMessage()
+func (r *protocol) EncodeMessage(pkt Encoder) (cid int, msg *Message, err error) {
+	msg = NewMessage()
 
 	cid = pkt.GetPerferCid()
 
@@ -158,8 +158,8 @@ func (r *rtmpProtocol) EncodeMessage(pkt RtmpEncoder) (cid int, msg *RtmpMessage
 	return
 }
 
-func (r *rtmpProtocol) SendPacket(pkt RtmpEncoder, stream_id uint32) (err error) {
-	var msg *RtmpMessage = nil
+func (r *protocol) SendPacket(pkt Encoder, stream_id uint32) (err error) {
+	var msg *Message = nil
 
 	// if pkt is encoder, encode packet to message.
 	var cid int
@@ -171,8 +171,8 @@ func (r *rtmpProtocol) SendPacket(pkt RtmpEncoder, stream_id uint32) (err error)
 	return r.SendMessage(msg, stream_id)
 }
 
-func (r *rtmpProtocol) SendMessage(pkt *RtmpMessage, stream_id uint32) (err error) {
-	var msg *RtmpMessage = pkt
+func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
+	var msg *Message = pkt
 
 	if msg == nil {
 		return RtmpError{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
@@ -191,7 +191,7 @@ func (r *rtmpProtocol) SendMessage(pkt *RtmpMessage, stream_id uint32) (err erro
 
 		if msg.SentPayloadLength <= 0 {
 			// write new chunk stream header, fmt is 0
-			var pheader *RtmpHPBuffer = NewRtmpStream(r.outHeaderFmt0)
+			var pheader *Buffer = NewRtmpStream(r.outHeaderFmt0)
 			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
 
 			// chunk message header, 11 bytes
@@ -215,7 +215,7 @@ func (r *rtmpProtocol) SendMessage(pkt *RtmpMessage, stream_id uint32) (err erro
 			real_header = r.outHeaderFmt0[0:len(r.outHeaderFmt0) - pheader.Left()]
 		} else {
 			// write no message header chunk stream, fmt is 3
-			var pheader *RtmpHPBuffer = NewRtmpStream(r.outHeaderFmt3)
+			var pheader *Buffer = NewRtmpStream(r.outHeaderFmt3)
 			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
 
 			// chunk extended timestamp header, 0 or 4 bytes, big-endian
@@ -261,12 +261,12 @@ func (r *rtmpProtocol) SendMessage(pkt *RtmpMessage, stream_id uint32) (err erro
 	return
 }
 
-func (r *rtmpProtocol) on_send_message(msg *RtmpMessage) (err error) {
+func (r *protocol) on_send_message(msg *Message) (err error) {
 	// TODO: FIXME: implements it
 	return
 }
 
-func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
+func (r *protocol) on_recv_message(msg *Message) (err error) {
 	// acknowledgement
 	if r.inAckSize.ShouldAckRead(r.conn.RecvBytes()) {
 		return r.response_acknowledgement_message()
@@ -281,7 +281,7 @@ func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	}
 
 	if msg.Header.IsWindowAcknowledgementSize() {
-		pkt := pkt.(*RtmpSetWindowAckSizePacket)
+		pkt := pkt.(*SetWindowAckSizePacket)
 		if pkt.AcknowledgementWindowSize > 0 {
 			r.inAckSize.ack_window_size = pkt.AcknowledgementWindowSize
 		}
@@ -292,7 +292,7 @@ func (r *rtmpProtocol) on_recv_message(msg *RtmpMessage) (err error) {
 	return
 }
 
-func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
+func (r *protocol) recv_interlaced_message() (msg *Message, err error) {
 	var format byte
 	var cid int
 
@@ -304,7 +304,7 @@ func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	// get the cached chunk stream.
 	chunk, ok := r.chunkStreams[cid]
 	if !ok {
-		chunk = NewRtmpChunkStream(cid)
+		chunk = NewChunkStream(cid)
 		r.chunkStreams[cid] = chunk
 	}
 
@@ -326,7 +326,7 @@ func (r *rtmpProtocol) recv_interlaced_message() (msg *RtmpMessage, err error) {
 	return
 }
 
-func (r *rtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
+func (r *protocol) read_basic_header() (format byte, cid int, bh_size int, err error) {
 	if err = r.buffer.EnsureBufferBytes(1); err != nil {
 		return
 	}
@@ -357,7 +357,7 @@ func (r *rtmpProtocol) read_basic_header() (format byte, cid int, bh_size int, e
 	return
 }
 
-func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) (mh_size int, err error) {
+func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size int, err error) {
 	/**
 	* we should not assert anything about fmt, for the first packet.
 	* (when first packet, the chunk->msg is NULL).
@@ -401,7 +401,7 @@ func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 
 	// create msg when new chunk stream start
 	if chunk.Msg == nil {
-		chunk.Msg = NewRtmpMessage()
+		chunk.Msg = NewMessage()
 	}
 
 	// read message header from socket to buffer.
@@ -519,7 +519,7 @@ func (r *rtmpProtocol) read_message_header(chunk *RtmpChunkStream, format byte) 
 	return
 }
 
-func (r *rtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMessage, err error) {
+func (r *protocol) read_message_payload(chunk *ChunkStream) (msg *Message, err error) {
 	// empty message
 	if int32(chunk.Header.PayloadLength) <= 0 {
 		msg = chunk.Msg
@@ -553,29 +553,29 @@ func (r *rtmpProtocol) read_message_payload(chunk *RtmpChunkStream) (msg *RtmpMe
 	return
 }
 
-func (r *rtmpProtocol) response_acknowledgement_message() (err error) {
+func (r *protocol) response_acknowledgement_message() (err error) {
 	// TODO: FIXME: implements it
 	return
 }
 
-func (r *RtmpMessageHeader) IsAmf0Command() (bool) {
+func (r *MessageHeader) IsAmf0Command() (bool) {
 	return r.MessageType == RTMP_MSG_AMF0CommandMessage
 }
-func (r *RtmpMessageHeader) IsAmf3Command() (bool) {
+func (r *MessageHeader) IsAmf3Command() (bool) {
 	return r.MessageType == RTMP_MSG_AMF3CommandMessage
 }
-func (r *RtmpMessageHeader) IsAmf0Data() (bool) {
+func (r *MessageHeader) IsAmf0Data() (bool) {
 	return r.MessageType == RTMP_MSG_AMF0DataMessage
 }
-func (r *RtmpMessageHeader) IsAmf3Data() (bool) {
+func (r *MessageHeader) IsAmf3Data() (bool) {
 	return r.MessageType == RTMP_MSG_AMF3DataMessage
 }
-func (r *RtmpMessageHeader) IsWindowAcknowledgementSize() (bool) {
+func (r *MessageHeader) IsWindowAcknowledgementSize() (bool) {
 	return r.MessageType == RTMP_MSG_WindowAcknowledgementSize
 }
-func (r *RtmpMessageHeader) IsSetChunkSize() (bool) {
+func (r *MessageHeader) IsSetChunkSize() (bool) {
 	return r.MessageType == RTMP_MSG_SetChunkSize
 }
-func (r *RtmpMessageHeader) IsUserControlMessage() (bool) {
+func (r *MessageHeader) IsUserControlMessage() (bool) {
 	return r.MessageType == RTMP_MSG_UserControlMessage
 }

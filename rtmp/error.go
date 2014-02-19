@@ -140,15 +140,10 @@ const ERROR_HTTP_PARSE_URI = 800
 const ERROR_HTTP_DATA_INVLIAD = 801
 const ERROR_HTTP_PARSE_HEADER = 802
 
-// system control message,
-// not an error, but special control logic.
-// sys ctl: rtmp close stream, support replay.
-const ERROR_CONTROL_RTMP_CLOSE = 900
-
 type RtmpError struct {
 	code int
 	desc string
 }
 func (err RtmpError) Error() string {
-	return fmt.Sprintf("code=%v: %s", err.code, err.desc)
+	return fmt.Sprintf("rtmp error code=%v: %s", err.code, err.desc)
 }

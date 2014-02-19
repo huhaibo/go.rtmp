@@ -471,9 +471,9 @@ func (r *RtmpAmf0Any) Boolean() (v bool, ok bool) {
 }
 
 type RtmpAmf0Codec struct {
-	stream *RtmpHPBuffer
+	stream *Buffer
 }
-func NewRtmpAmf0Codec(stream *RtmpHPBuffer) (*RtmpAmf0Codec) {
+func NewRtmpAmf0Codec(stream *Buffer) (*RtmpAmf0Codec) {
 	r := RtmpAmf0Codec{}
 	r.stream = stream
 	return &r

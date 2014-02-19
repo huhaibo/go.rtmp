@@ -30,23 +30,23 @@ import (
 )
 
 const (
-	RtmpCodecAMF0 = 0
-	RtmpCodecAMF3 = 3
-	RtmpDefaultPort = 1935
+	CodecAMF0 = 0
+	CodecAMF3 = 3
+	DefaultPort = 1935
 	// 5.6. Set Peer Bandwidth (6)
 	// the Limit type field:
 	// hard (0), soft (1), or dynamic (2)
-	RtmpPeerBandwidthHard = 0
-	RtmpPeerBandwidthSoft = 1
-	RtmpPeerBandwidthDynamic = 2
+	PeerBandwidthHard = 0
+	PeerBandwidthSoft = 1
+	PeerBandwidthDynamic = 2
 )
 
 /**
 * the signature for packets to client.
 */
-const RTMP_SIG_FMS_VER = "3,5,3,888"
-const RTMP_SIG_AMF0_VER = 0
-const RTMP_SIG_CLIENT_ID = "ASAICiss"
+const SIG_FMS_VER = "3,5,3,888"
+const SIG_AMF0_VER = 0
+const SIG_CLIENT_ID = "ASAICiss"
 
 /**
 * onStatus consts.
@@ -72,17 +72,22 @@ const SCODE_DataStart = "NetStream.Data.Start"
 const SCODE_UnpublishSuccess = "NetStream.Unpublish.Success"
 
 // FMLE
-const RTMP_AMF0_COMMAND_ON_FC_PUBLISH = "onFCPublish"
-const RTMP_AMF0_COMMAND_ON_FC_UNPUBLISH = "onFCUnpublish"
+const AMF0_COMMAND_ON_FC_PUBLISH = "onFCPublish"
+const AMF0_COMMAND_ON_FC_UNPUBLISH = "onFCUnpublish"
 
-// default stream id for response the createStream request.
-const SRS_DEFAULT_SID = 1
+// type of client
+const (
+	CLIENT_TYPE_Unknown = iota
+	CLIENT_TYPE_Play
+	CLIENT_TYPE_FMLEPublish
+	CLIENT_TYPE_FlashPublish
+)
 
 /**
 * the original request from client.
 */
 // @see: SrsRequest
-type RtmpRequest struct {
+type Request struct {
 	/**
 	* tcUrl: rtmp://request_vhost:port/app/stream
 	* support pass vhost in query string, such as:
@@ -92,7 +97,7 @@ type RtmpRequest struct {
 	TcUrl string
 	PageUrl string
 	SwfUrl string
-	// enum RtmpCodecAMF0 or RtmpCodecAMF3
+	// enum CodecAMF0 or CodecAMF3
 	ObjectEncoding int
 
 	/**
@@ -104,14 +109,14 @@ type RtmpRequest struct {
 	App string
 	Stream string
 }
-func NewRtmpRequest() (*RtmpRequest) {
-	r := &RtmpRequest{}
-	r.ObjectEncoding = RtmpCodecAMF0
-	r.Port = strconv.Itoa(RtmpDefaultPort)
+func NewRequest() (*Request) {
+	r := &Request{}
+	r.ObjectEncoding = CodecAMF0
+	r.Port = strconv.Itoa(DefaultPort)
 	return r
 }
 
-func (r *RtmpRequest) discovery_app() (err error) {
+func (r *Request) discovery_app() (err error) {
 	// parse ...vhost... to ?vhost=
 	var v string = r.TcUrl
 	if !strings.Contains(v, "?") {
@@ -167,9 +172,16 @@ func (r *RtmpRequest) discovery_app() (err error) {
 }
 
 /**
-* the rtmp server interface, user can create it by func NewRtmpServer().
+* genereate the stream id, to response CreateStream() request.
  */
-type RtmpServer interface {
+type RtmpStreamIdGenerator interface {
+	StreamId() (n int)
+}
+
+/**
+* the rtmp server interface, user can create it by func NewServer().
+ */
+type Server interface {
 	/**
 	* handshake with client, try complex handshake first, use simple if failed.
 	 */
@@ -178,7 +190,7 @@ type RtmpServer interface {
 	* expect client send the connect app request,
 	* @param req set and parse data to the request
 	 */
-	ConnectApp(req *RtmpRequest) (err error)
+	ConnectApp(req *Request) (err error)
 	/**
 	* set the ack size window
 	* @param ack_size in bytes, for example, 2.5 * 1000 * 1000
@@ -187,7 +199,7 @@ type RtmpServer interface {
 	/**
 	* set the peer bandwidth,
 	* @param bandwidth in bytes, for example, 2.5 * 1000 * 1000
-	* @param bw_type can be RtmpPeerBandwidthHard, RtmpPeerBandwidthSoft or RtmpPeerBandwidthDynamic
+	* @param bw_type can be PeerBandwidthHard, PeerBandwidthSoft or PeerBandwidthDynamic
 	 */
 	SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error)
 	/**
@@ -199,34 +211,42 @@ type RtmpServer interface {
 	* 		where the slice used to keep the sequence of data.
 	* 		for example, []map[string]string { {"server":"go.srs"}, {"version":"1.0"} }
 	 */
-	ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data []map[string]string) (err error)
+	ReponseConnectApp(req *Request, server_ip string, extra_data []map[string]string) (err error)
 	/**
 	* call client onBWDone() method
 	 */
 	CallOnBWDone() (err error)
+	/**
+	* identify the client stream type, can be const value:
+	* 		CLIENT_TYPE_Unknown, cannot identify the client.
+	* 		CLIENT_TYPE_Play the client is a play client, for example, the Flash play.
+	* 		CLIENT_TYPE_FMLEPublish the client is publish client use FMLE schema, for example, the adobe FMLE
+	* 		CLIENT_TYPE_FlashPublish the client is publish client use Flash schema, for example, the Flash publish.
+	 */
+	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error)
 }
-func NewRtmpServer(conn *net.TCPConn) (RtmpServer, error) {
+func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
-	r := &rtmpServer{}
-	if r.protocol, err = NewRtmpProtocol(conn); err != nil {
+	r := &server{}
+	if r.protocol, err = NewProtocol(conn); err != nil {
 		return r, err
 	}
 	return r, err
 }
 
-type rtmpServer struct {
-	protocol RtmpProtocol
+type server struct {
+	protocol Protocol
 }
 
-func (r *rtmpServer) Handshake() (err error) {
+func (r *server) Handshake() (err error) {
 	// TODO: FIXME: try complex then simple handshake.
 	err = r.protocol.SimpleHandshake2Client()
 	return
 }
 
-func (r *rtmpServer) ConnectApp(req *RtmpRequest) (err error) {
-	//var msg *RtmpMessage
-	var pkt *RtmpConnectAppPacket
+func (r *server) ConnectApp(req *Request) (err error) {
+	//var msg *Message
+	var pkt *ConnectAppPacket
 	if _, err = r.protocol.ExpectMessage(&pkt); err != nil {
 		return
 	}
@@ -249,19 +269,19 @@ func (r *rtmpServer) ConnectApp(req *RtmpRequest) (err error) {
 	return req.discovery_app()
 }
 
-func (r *rtmpServer) SetWindowAckSize(ack_size uint32) (err error) {
-	pkt := RtmpSetWindowAckSizePacket{AcknowledgementWindowSize:ack_size}
+func (r *server) SetWindowAckSize(ack_size uint32) (err error) {
+	pkt := SetWindowAckSizePacket{AcknowledgementWindowSize:ack_size}
 	return r.protocol.SendPacket(&pkt, uint32(0))
 }
 
-func (r *rtmpServer) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error) {
-	pkt := RtmpSetPeerBandwidthPacket{Bandwidth:bandwidth, BandwidthType:bw_type}
+func (r *server) SetPeerBandwidth(bandwidth uint32, bw_type byte) (err error) {
+	pkt := SetPeerBandwidthPacket{Bandwidth:bandwidth, BandwidthType:bw_type}
 	return r.protocol.SendPacket(&pkt, uint32(0))
 }
 
-func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra_data []map[string]string) (err error) {
+func (r *server) ReponseConnectApp(req *Request, server_ip string, extra_data []map[string]string) (err error) {
 	data := NewRtmpAmf0EcmaArray()
-	data.Set("version", ToAmf0(RTMP_SIG_FMS_VER))
+	data.Set("version", ToAmf0(SIG_FMS_VER))
 	if server_ip != "" {
 		data.Set("srs_server_ip", ToAmf0(server_ip))
 	}
@@ -271,15 +291,20 @@ func (r *rtmpServer) ReponseConnectApp(req *RtmpRequest, server_ip string, extra
 		}
 	}
 
-	var pkt *RtmpConnectAppResPacket = NewRtmpConnectAppResPacket()
-	pkt.PropsSet("fmsVer", "FMS/"+RTMP_SIG_FMS_VER).PropsSet("capabilities", float64(127)).PropsSet("mode", float64(1))
+	var pkt *ConnectAppResPacket = NewConnectAppResPacket()
+	pkt.PropsSet("fmsVer", "FMS/"+SIG_FMS_VER).PropsSet("capabilities", float64(127)).PropsSet("mode", float64(1))
 	pkt.InfoSet(SLEVEL, SLEVEL_Status).InfoSet(SCODE, SCODE_ConnectSuccess).InfoSet(SDESC, "Connection succeeded")
 	pkt.InfoSet("objectEncoding", float64(req.ObjectEncoding)).InfoSet("data", data)
 
 	return r.protocol.SendPacket(pkt, uint32(0))
 }
 
-func (r *rtmpServer) CallOnBWDone() (err error) {
-	var pkt *RtmpOnBWDonePacket = NewRtmpOnBWDonePacket()
+func (r *server) CallOnBWDone() (err error) {
+	var pkt *OnBWDonePacket = NewOnBWDonePacket()
 	return r.protocol.SendPacket(pkt, uint32(0))
+}
+
+func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type int, stream_name string, err error) {
+	client_type = CLIENT_TYPE_Unknown
+	return
 }

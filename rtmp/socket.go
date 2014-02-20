@@ -64,7 +64,7 @@ func (r *Socket) Write(b []byte) (n int, err error) {
 	}
 
 	if n != len(b) {
-		err = RtmpError{code:ERROR_GO_SOCKET_WRITE_PARTIAL, desc:fmt.Sprintf("write partial, expect=%v, actual=%v", len(b), n)}
+		err = Error{code:ERROR_GO_SOCKET_WRITE_PARTIAL, desc:fmt.Sprintf("write partial, expect=%v, actual=%v", len(b), n)}
 	}
 
 	return

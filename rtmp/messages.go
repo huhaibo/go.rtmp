@@ -339,7 +339,7 @@ func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet in
 
 			var request_name string
 			if request_name = r.HistoryRequestName(transaction_id); request_name == "" {
-				err = RtmpError{code:ERROR_RTMP_NO_REQUEST, desc:"decode AMF0/AMF3 transaction request failed"}
+				err = Error{code:ERROR_RTMP_NO_REQUEST, desc:"decode AMF0/AMF3 transaction request failed"}
 				return
 			}
 
@@ -411,21 +411,21 @@ func (r *ConnectAppPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName != AMF0_COMMAND_CONNECT {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CONNECT, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CONNECT, r.CommandName)}
 	}
 
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
 	}
 	if r.TransactionId != 1.0 {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect transaction_id failed."}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect transaction_id failed."}
 	}
 
 	if r.CommandObject, err = codec.ReadObject(); err != nil {
 		return
 	}
 	if r.CommandObject == nil {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_object failed."}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 decode connect command_object failed."}
 	}
 
 	return
@@ -543,7 +543,7 @@ func NewSetWindowAckSizePacket() (*SetWindowAckSizePacket) {
 // Decoder
 func (r *SetWindowAckSizePacket) Decode(s *Buffer) (err error) {
 	if !s.Requires(4) {
-		err = RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode ack window size failed."}
+		err = Error{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode ack window size failed."}
 		return
 	}
 	r.AcknowledgementWindowSize = s.ReadUInt32()
@@ -561,7 +561,7 @@ func (r *SetWindowAckSizePacket) GetSize() (v int) {
 }
 func (r *SetWindowAckSizePacket) Encode(s *Buffer) (err error) {
 	if !s.Requires(4) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode ack size packet failed."}
+		return Error{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode ack size packet failed."}
 	}
 	s.WriteUInt32(r.AcknowledgementWindowSize)
 	return
@@ -584,16 +584,16 @@ func NewSetChunkSizePacket() (*SetChunkSizePacket) {
 // Decoder
 func (r *SetChunkSizePacket) Decode(s *Buffer) (err error) {
 	if !s.Requires(4) {
-		err = RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode chunk size failed."}
+		err = Error{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode chunk size failed."}
 		return
 	}
 	r.ChunkSize = s.ReadUInt32()
 
 	if r.ChunkSize < RTMP_MIN_CHUNK_SIZE {
-		err = RtmpError{code:ERROR_RTMP_CHUNK_SIZE, desc:"atleast min chunk size."}
+		err = Error{code:ERROR_RTMP_CHUNK_SIZE, desc:"atleast min chunk size."}
 	}
 	if r.ChunkSize > RTMP_MAX_CHUNK_SIZE {
-		err = RtmpError{code:ERROR_RTMP_CHUNK_SIZE, desc:"exceed max chunk size."}
+		err = Error{code:ERROR_RTMP_CHUNK_SIZE, desc:"exceed max chunk size."}
 	}
 	return
 }
@@ -609,7 +609,7 @@ func (r *SetChunkSizePacket) GetSize() (v int) {
 }
 func (r *SetChunkSizePacket) Encode(s *Buffer) (err error) {
 	if !s.Requires(4) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode chunk packet failed."}
+		return Error{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode chunk packet failed."}
 	}
 	s.WriteUInt32(r.ChunkSize)
 	return
@@ -637,7 +637,7 @@ func (r *SetPeerBandwidthPacket) GetSize() (v int) {
 }
 func (r *SetPeerBandwidthPacket) Encode(s *Buffer) (err error) {
 	if !s.Requires(5) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode set bandwidth packet failed."}
+		return Error{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode set bandwidth packet failed."}
 	}
 	s.WriteUInt32(r.Bandwidth).WriteByte(r.BandwidthType)
 	return
@@ -712,7 +712,7 @@ func (r *CreateStreamPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_CREATE_STREAM {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CREATE_STREAM, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CREATE_STREAM, r.CommandName)}
 	}
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
@@ -772,7 +772,7 @@ func (r *CreateStreamResPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_RESULT {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_RESULT, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_RESULT, r.CommandName)}
 	}
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
@@ -844,7 +844,7 @@ func (r *PlayPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_PLAY {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PLAY, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PLAY, r.CommandName)}
 	}
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
@@ -878,7 +878,7 @@ func (r *PlayPacket) Decode(s *Buffer) (err error) {
 	} else if v, ok := reset_value.Number(); ok {
 		r.Reset = (v != 0)
 	} else {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 invalid type, requires number or bool"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 invalid type, requires number or bool"}
 	}
 	return
 }
@@ -952,7 +952,7 @@ func (r *PublishPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName == "" || r.CommandName != AMF0_COMMAND_PUBLISH {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PUBLISH, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_PUBLISH, r.CommandName)}
 	}
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {
 		return
@@ -1050,7 +1050,7 @@ func NewUserControlPacket() (*UserControlPacket) {
 // Decoder
 func (r *UserControlPacket) Decode(s *Buffer) (err error) {
 	if !s.Requires(6) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode user control failed"}
+		return Error{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode user control failed"}
 	}
 
 	r.EventType = s.ReadUInt16()
@@ -1061,7 +1061,7 @@ func (r *UserControlPacket) Decode(s *Buffer) (err error) {
 	}
 
 	if !s.Requires(4) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode PCUC set buffer length failed"}
+		return Error{code:ERROR_RTMP_MESSAGE_DECODE, desc:"decode PCUC set buffer length failed"}
 	}
 	r.ExtraData = s.ReadUInt32()
 	return
@@ -1082,7 +1082,7 @@ func (r *UserControlPacket) GetSize() (v int) {
 }
 func (r *UserControlPacket) Encode(s *Buffer) (err error) {
 	if !s.Requires(6) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode user control failed"}
+		return Error{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode user control failed"}
 	}
 	s.WriteUInt16(r.EventType).WriteUInt32(r.EventData)
 
@@ -1093,7 +1093,7 @@ func (r *UserControlPacket) Encode(s *Buffer) (err error) {
 	}
 
 	if !s.Requires(4) {
-		return RtmpError{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode PCUC set buffer length failed"}
+		return Error{code:ERROR_RTMP_MESSAGE_ENCODE, desc:"encode PCUC set buffer length failed"}
 	}
 	s.WriteUInt32(r.ExtraData)
 	return
@@ -1259,7 +1259,7 @@ func (r *CloseStreamPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 	if r.CommandName != AMF0_COMMAND_CLOSE_STREAM {
-		return RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CLOSE_STREAM, r.CommandName)}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=%v, actual=%v", AMF0_COMMAND_CLOSE_STREAM, r.CommandName)}
 	}
 
 	if r.TransactionId, err = codec.ReadNumber(); err != nil {

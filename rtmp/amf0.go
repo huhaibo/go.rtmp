@@ -96,7 +96,7 @@ func (r *Amf0UnSortedHashtable) Write(codec *Amf0Codec) (err error) {
 }
 func (r *Amf0UnSortedHashtable) Set(k string, v *Amf0Any) (err error) {
 	if v == nil {
-		err = RtmpError{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
+		err = Error{code:ERROR_GO_AMF0_NIL_PROPERTY, desc:"AMF0 object property value should never be nil"}
 		return
 	}
 
@@ -150,12 +150,12 @@ func (r *Amf0Object) Size() (n int) {
 func (r *Amf0Object) Read(codec *Amf0Codec) (err error) {
 	// marker
 	if !codec.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object requires 1bytes marker"}
 		return
 	}
 
 	if r.marker = codec.stream.ReadByte(); r.marker != AMF0_Object{
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object marker invalid"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 object marker invalid"}
 		return
 	}
 
@@ -187,7 +187,7 @@ func (r *Amf0Object) Read(codec *Amf0Codec) (err error) {
 func (r *Amf0Object) Write(codec *Amf0Codec) (err error) {
 	// marker
 	if !codec.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object marker failed"}
 		return
 	}
 	codec.stream.WriteByte(byte(AMF0_Object))
@@ -243,18 +243,18 @@ func (r *Amf0EcmaArray) Size() (n int) {
 func (r *Amf0EcmaArray) Read(codec *Amf0Codec) (err error) {
 	// marker
 	if !codec.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray requires 1bytes marker"}
 		return
 	}
 
 	if r.marker = codec.stream.ReadByte(); r.marker != AMF0_EcmaArray{
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray marker invalid"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 EcmaArray marker invalid"}
 		return
 	}
 
 	// count
 	if !codec.stream.Requires(4) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 read ecma_array count failed"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 read ecma_array count failed"}
 		return
 	}
 	r.count = codec.stream.ReadUInt32()
@@ -288,14 +288,14 @@ func (r *Amf0EcmaArray) Read(codec *Amf0Codec) (err error) {
 func (r *Amf0EcmaArray) Write(codec *Amf0Codec) (err error) {
 	// marker
 	if !codec.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write EcmaArray marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write EcmaArray marker failed"}
 		return
 	}
 	codec.stream.WriteByte(byte(AMF0_EcmaArray))
 
 	// count
 	if !codec.stream.Requires(4) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write ecma_array count failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write ecma_array count failed"}
 		return
 	}
 	codec.stream.WriteUInt32(r.count)
@@ -407,7 +407,7 @@ func (r *Amf0Any) Write(codec *Amf0Codec) (err error) {
 func (r *Amf0Any) Read(codec *Amf0Codec) (err error) {
 	// marker
 	if !codec.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 any requires 1bytes marker"}
 		return
 	}
 	r.Marker = codec.stream.ReadByte()
@@ -428,7 +428,7 @@ func (r *Amf0Any) Read(codec *Amf0Codec) (err error) {
 		r.Value, err = codec.ReadEcmaArray()
 	// TODO: FIXME: implements it.
 	default:
-		err = RtmpError{code:ERROR_RTMP_AMF0_INVALID, desc:fmt.Sprintf("invalid amf0 message type. marker=%#x", r.Marker)}
+		err = Error{code:ERROR_RTMP_AMF0_INVALID, desc:fmt.Sprintf("invalid amf0 message type. marker=%#x", r.Marker)}
 	}
 
 	return
@@ -503,12 +503,12 @@ func Amf0SizeObjectEOF() (int) {
 func (r *Amf0Codec) ReadString() (v string, err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string requires 1bytes marker"}
 		return
 	}
 
 	if marker := r.stream.ReadByte(); marker != AMF0_String {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string marker invalid"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 string marker invalid"}
 		return
 	}
 
@@ -519,7 +519,7 @@ func (r *Amf0Codec) ReadString() (v string, err error) {
 func (r *Amf0Codec) WriteString(v string) (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_String))
@@ -529,14 +529,14 @@ func (r *Amf0Codec) WriteString(v string) (err error) {
 func (r *Amf0Codec) WriteBoolean(v bool) (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write bool marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write bool marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_Boolean))
 
 	// value
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write bool value failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write bool value failed"}
 		return
 	}
 	if v {
@@ -550,7 +550,7 @@ func (r *Amf0Codec) WriteBoolean(v bool) (err error) {
 func (r *Amf0Codec) ReadUtf8() (v string, err error) {
 	// len
 	if !r.stream.Requires(2) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 len requires 2bytes"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 len requires 2bytes"}
 		return
 	}
 	len := r.stream.ReadUInt16()
@@ -562,7 +562,7 @@ func (r *Amf0Codec) ReadUtf8() (v string, err error) {
 
 	// data
 	if !r.stream.Requires(int(len)) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 data requires more bytes"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 data requires more bytes"}
 		return
 	}
 	v = r.stream.ReadString(int(len))
@@ -573,7 +573,7 @@ func (r *Amf0Codec) ReadUtf8() (v string, err error) {
 	for _, ch := range v {
 		if (ch & 0x80) != 0 {
 			// ignored. only support utf8-1, 0x00-0x7F
-			//err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"only support utf8-1, 0x00-0x7F"}
+			//err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"only support utf8-1, 0x00-0x7F"}
 			//return
 		}
 	}
@@ -584,7 +584,7 @@ func (r *Amf0Codec) ReadUtf8() (v string, err error) {
 func (r *Amf0Codec) WriteUtf8(v string) (err error) {
 	// len
 	if !r.stream.Requires(2) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string length failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string length failed"}
 		return
 	}
 	r.stream.WriteUInt16(uint16(len(v)))
@@ -596,7 +596,7 @@ func (r *Amf0Codec) WriteUtf8(v string) (err error) {
 
 	// data
 	if !r.stream.Requires(len(v)) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string data failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write string data failed"}
 		return
 	}
 	r.stream.Write([]byte(v))
@@ -606,18 +606,18 @@ func (r *Amf0Codec) WriteUtf8(v string) (err error) {
 func (r *Amf0Codec) ReadNumber() (v float64, err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 1bytes marker"}
 		return
 	}
 
 	if marker := r.stream.ReadByte(); marker != AMF0_Number{
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number marker invalid"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number marker invalid"}
 		return
 	}
 
 	// value
 	if !r.stream.Requires(8) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 8bytes value"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 number requires 8bytes value"}
 		return
 	}
 	v = r.stream.ReadFloat64()
@@ -628,14 +628,14 @@ func (r *Amf0Codec) ReadNumber() (v float64, err error) {
 func (r *Amf0Codec) WriteNumber(v float64) (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write number marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write number marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_Number))
 
 	// value
 	if !r.stream.Requires(8) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write number value failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write number value failed"}
 		return
 	}
 	r.stream.WriteFloat64(v)
@@ -646,7 +646,7 @@ func (r *Amf0Codec) WriteNumber(v float64) (err error) {
 func (r *Amf0Codec) WriteNull() (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write null marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write null marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_Null))
@@ -657,7 +657,7 @@ func (r *Amf0Codec) WriteNull() (err error) {
 func (r *Amf0Codec) ReadNull() (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 read null marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 read null marker failed"}
 		return
 	}
 	r.stream.ReadByte()
@@ -669,7 +669,7 @@ func (r *Amf0Codec) ReadNull() (err error) {
 func (r *Amf0Codec) WriteUndefined() (err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write undefined marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write undefined marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_Undefined))
@@ -680,18 +680,18 @@ func (r *Amf0Codec) WriteUndefined() (err error) {
 func (r *Amf0Codec) ReadBoolean() (v bool, err error) {
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 1bytes marker"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 1bytes marker"}
 		return
 	}
 
 	if marker := r.stream.ReadByte(); marker != AMF0_Boolean{
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool marker invalid"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool marker invalid"}
 		return
 	}
 
 	// value
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 8bytes value"}
+		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 bool requires 8bytes value"}
 		return
 	}
 
@@ -727,14 +727,14 @@ func (r *Amf0Codec) WriteEcmaArray(v *Amf0EcmaArray) (err error) {
 func (r *Amf0Codec) WriteObjectEOF() (err error) {
 	// value
 	if !r.stream.Requires(2) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object eof value failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object eof value failed"}
 		return
 	}
 	r.stream.WriteUInt16(uint16(0))
 
 	// marker
 	if !r.stream.Requires(1) {
-		err = RtmpError{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object eof marker failed"}
+		err = Error{code:ERROR_RTMP_AMF0_ENCODE, desc:"amf0 write object eof marker failed"}
 		return
 	}
 	r.stream.WriteByte(byte(AMF0_ObjectEnd))

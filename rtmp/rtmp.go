@@ -159,16 +159,16 @@ func (r *Request) discovery_app() (err error) {
 	// TODO: discovery the params of vhost.
 
 	if r.Schema = strings.Trim(r.Schema, "/\n\r "); r.Schema == ""{
-		return RtmpError{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery schema failed. tcUrl=%v", r.TcUrl)}
+		return Error{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery schema failed. tcUrl=%v", r.TcUrl)}
 	}
 	if r.Vhost = strings.Trim(r.Vhost, "/\n\r "); r.Vhost == "" {
-		return RtmpError{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery vhost failed. tcUrl=%v", r.TcUrl)}
+		return Error{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery vhost failed. tcUrl=%v", r.TcUrl)}
 	}
 	if r.App = strings.Trim(r.App, "/\n\r "); r.App == "" {
-		return RtmpError{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery app failed. tcUrl=%v", r.TcUrl)}
+		return Error{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery app failed. tcUrl=%v", r.TcUrl)}
 	}
 	if r.Port = strings.Trim(r.Port, "/\n\r "); r.Port == "" {
-		return RtmpError{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery port failed. tcUrl=%v", r.TcUrl)}
+		return Error{code:ERROR_RTMP_REQ_TCURL, desc:fmt.Sprintf("discovery port failed. tcUrl=%v", r.TcUrl)}
 	}
 
 	return
@@ -270,7 +270,7 @@ func (r *server) ConnectApp(req *Request) (err error) {
 
 	var ok bool
 	if req.TcUrl, ok = pkt.CommandObject.GetPropertyString("tcUrl"); !ok {
-		err = RtmpError{code:ERROR_RTMP_REQ_CONNECT, desc:"invalid request, must specifies the tcUrl."}
+		err = Error{code:ERROR_RTMP_REQ_CONNECT, desc:"invalid request, must specifies the tcUrl."}
 		return
 	}
 	if v, ok := pkt.CommandObject.GetPropertyString("pageUrl"); ok {

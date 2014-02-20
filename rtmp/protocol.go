@@ -91,15 +91,15 @@ func (r *protocol) ExpectMessage(v interface {}) (msg *Message, err error) {
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 	if rv.Kind() != reflect.Ptr {
-		err = RtmpError{code:ERROR_GO_REFLECT_PTR_REQUIRES, desc:"param must be ptr for expect message"}
+		err = Error{code:ERROR_GO_REFLECT_PTR_REQUIRES, desc:"param must be ptr for expect message"}
 		return
 	}
 	if rv.IsNil() {
-		err = RtmpError{code:ERROR_GO_REFLECT_NEVER_NIL, desc:"param should never be nil"}
+		err = Error{code:ERROR_GO_REFLECT_NEVER_NIL, desc:"param should never be nil"}
 		return
 	}
 	if !rv.Elem().CanSet() {
-		err = RtmpError{code:ERROR_GO_REFLECT_CAN_SET, desc:"param should be settable"}
+		err = Error{code:ERROR_GO_REFLECT_CAN_SET, desc:"param should be settable"}
 		return
 	}
 
@@ -182,7 +182,7 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 	var msg *Message = pkt
 
 	if msg == nil {
-		return RtmpError{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
+		return Error{code:ERROR_GO_RTMP_NOT_SUPPORT_MSG, desc:"message not support send"}
 	}
 	if stream_id > 0 {
 		msg.Header.StreamId = stream_id
@@ -418,14 +418,14 @@ func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size
 	// but, we can ensure that when a chunk stream is fresh,
 	// the fmt must be 0, a new stream.
 	if chunk.MsgCount == 0 && format != RTMP_FMT_TYPE0 {
-		err = RtmpError{code:ERROR_RTMP_CHUNK_START, desc:"protocol error, fmt of first chunk must be 0"}
+		err = Error{code:ERROR_RTMP_CHUNK_START, desc:"protocol error, fmt of first chunk must be 0"}
 		return
 	}
 
 	// when exists cache msg, means got an partial message,
 	// the fmt must not be type0 which means new message.
 	if chunk.Msg != nil && format == RTMP_FMT_TYPE0 {
-		err = RtmpError{code:ERROR_RTMP_CHUNK_START, desc:"protocol error, unexpect start of new chunk"}
+		err = Error{code:ERROR_RTMP_CHUNK_START, desc:"protocol error, unexpect start of new chunk"}
 		return
 	}
 
@@ -496,7 +496,7 @@ func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size
 
 			// if msg exists in cache, the size must not changed.
 			if chunk.Msg.Payload != nil && len(chunk.Msg.Payload) != int(chunk.Header.PayloadLength) {
-				err = RtmpError{code:ERROR_RTMP_PACKET_SIZE, desc:"cached message size should never change"}
+				err = Error{code:ERROR_RTMP_PACKET_SIZE, desc:"cached message size should never change"}
 				return
 			}
 
@@ -535,7 +535,7 @@ func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size
 
 	// valid message
 	if int32(chunk.Header.PayloadLength) < 0 {
-		err = RtmpError{code:ERROR_RTMP_MSG_INVLIAD_SIZE, desc:"chunk packet should never be negative"}
+		err = Error{code:ERROR_RTMP_MSG_INVLIAD_SIZE, desc:"chunk packet should never be negative"}
 		return
 	}
 

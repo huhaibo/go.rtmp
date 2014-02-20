@@ -140,10 +140,10 @@ const ERROR_HTTP_PARSE_URI = 800
 const ERROR_HTTP_DATA_INVLIAD = 801
 const ERROR_HTTP_PARSE_HEADER = 802
 
-type RtmpError struct {
+type Error struct {
 	code int
 	desc string
 }
-func (err RtmpError) Error() string {
+func (err Error) Error() string {
 	return fmt.Sprintf("rtmp error code=%v: %s", err.code, err.desc)
 }

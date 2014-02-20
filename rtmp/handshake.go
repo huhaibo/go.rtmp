@@ -70,7 +70,7 @@ func (r *protocol) SimpleHandshake2Client() (err error) {
 
 	// plain text required.
 	if handshake.c0c1[0] != 0x03 {
-		err = RtmpError{code:ERROR_RTMP_PLAIN_REQUIRED, desc:"only support rtmp plain text"}
+		err = Error{code:ERROR_RTMP_PLAIN_REQUIRED, desc:"only support rtmp plain text"}
 		return
 	}
 

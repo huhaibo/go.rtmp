@@ -26,6 +26,7 @@ import (
 	"math/rand"
 	"time"
 	"fmt"
+	"strings"
 )
 
 /**
@@ -193,11 +194,15 @@ type Protocol interface {
 	 */
 	DecodeMessage(msg *Message) (pkt interface {}, err error)
 	/**
-	* expect specified message by v, where v must be a ptr,
-	* protocol stack will RecvMessage from connection and convert/set msg to v
-	* if type matched, or drop the message and try again.
+	* expect specified packet by v, where v must be a ptr,
+	* protocol stack will RecvMessage from connection and DecodeMessage(msg) to pkt,
+	* then convert/set msg to v if type matched, or drop the message and try again.
+	* for example:
+	* 		var pkt *ConnectAppPacket
+	*		_, err = r.protocol.ExpectPacket(&pkt)
+	* 		// use the decoded pkt contains the connect app info.
 	 */
-	ExpectMessage(v interface {}) (msg *Message, err error)
+	ExpectPacket(v interface {}) (msg *Message, err error)
 	/**
 	* encode the packet to message, then send out by SendMessage.
 	* return the cid which packet prefer.
@@ -361,6 +366,12 @@ func DecodePacket(r *protocol, header *MessageHeader, payload []byte) (packet in
 			pkt = NewPublishPacket()
 		case AMF0_COMMAND_CLOSE_STREAM:
 			pkt = NewCloseStreamPacket()
+		case AMF0_COMMAND_RELEASE_STREAM:
+			pkt = NewFMLEStartPacket()
+		case AMF0_COMMAND_FC_PUBLISH:
+			pkt = NewFMLEStartPacket()
+		case AMF0_COMMAND_UNPUBLISH:
+			pkt = NewFMLEStartPacket()
 		}
 		// TODO: FIXME: implements it
 	} else if header.IsWindowAcknowledgementSize() {
@@ -1269,5 +1280,93 @@ func (r *CloseStreamPacket) Decode(s *Buffer) (err error) {
 		return
 	}
 
+	return
+}
+
+/**
+* FMLE start publish: ReleaseStream/PublishStream
+*/
+// @see: SrsFMLEStartPacket
+type FMLEStartPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+	StreamName string
+}
+func NewFMLEStartPacket() (*FMLEStartPacket) {
+	r := &FMLEStartPacket{}
+	r.CommandName = AMF0_COMMAND_RELEASE_STREAM
+	r.CommandObject = NewAmf0Null()
+	return r
+}
+// Decoder
+func (r *FMLEStartPacket) Decode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if r.CommandName, err = codec.ReadString(); err != nil {
+		return
+	}
+	if r.CommandName != AMF0_COMMAND_RELEASE_STREAM && r.CommandName != AMF0_COMMAND_FC_PUBLISH && r.CommandName != AMF0_COMMAND_UNPUBLISH {
+		names := []string {AMF0_COMMAND_RELEASE_STREAM, AMF0_COMMAND_FC_PUBLISH, AMF0_COMMAND_UNPUBLISH}
+		return Error{code:ERROR_RTMP_AMF0_DECODE, desc:fmt.Sprintf("amf0 decode name failed. expect=(%v), actual=%v", strings.Join(names, ","), r.CommandName)}
+	}
+
+	if r.TransactionId, err = codec.ReadNumber(); err != nil {
+		return
+	}
+	if err = r.CommandObject.Read(codec); err != nil {
+		return
+	}
+	if r.StreamName, err = codec.ReadString(); err != nil {
+		return
+	}
+
+	return
+}
+
+/**
+* response for SrsFMLEStartPacket.
+*/
+// @see: SrsFMLEStartResPacket
+type FMLEStartResPacket struct {
+	CommandName string
+	TransactionId float64
+	CommandObject *Amf0Any // Null
+	Args *Amf0Any // Undefined
+
+}
+func NewFMLEStartResPacket(transaction_id float64) (*FMLEStartResPacket) {
+	r := &FMLEStartResPacket{}
+	r.CommandName = AMF0_COMMAND_RESULT
+	r.TransactionId = transaction_id
+	r.CommandObject = NewAmf0Null()
+	r.Args = NewAmf0Undefined()
+	return r
+}
+// Encoder
+func (r *FMLEStartResPacket) GetPerferCid() (v int) {
+	return RTMP_CID_OverConnection
+}
+func (r *FMLEStartResPacket) GetMessageType() (v byte) {
+	return RTMP_MSG_AMF0CommandMessage
+}
+func (r *FMLEStartResPacket) GetSize() (v int) {
+	return Amf0SizeString(r.CommandName) + Amf0SizeNumber() + r.CommandObject.Size() + r.Args.Size()
+}
+func (r *FMLEStartResPacket) Encode(s *Buffer) (err error) {
+	codec := NewAmf0Codec(s)
+
+	if err = codec.WriteString(r.CommandName); err != nil {
+		return
+	}
+	if err = codec.WriteNumber(r.TransactionId); err != nil {
+		return
+	}
+	if err = r.CommandObject.Write(codec); err != nil {
+		return
+	}
+	if err = r.Args.Write(codec); err != nil {
+		return
+	}
 	return
 }

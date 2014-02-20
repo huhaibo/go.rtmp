@@ -82,12 +82,8 @@ func (r *protocol) DecodeMessage(msg *Message) (pkt interface {}, err error) {
 
 /**
 * expect a specified message by v, drop others util got specified one.
-* for example:
-* 		var pkt *ConnectAppPacket
-*		_, err = r.protocol.ExpectMessage(&pkt)
-* 		// use the decoded pkt contains the connect app info.
 */
-func (r *protocol) ExpectMessage(v interface {}) (msg *Message, err error) {
+func (r *protocol) ExpectPacket(v interface {}) (msg *Message, err error) {
 	rv := reflect.ValueOf(v)
 	rt := reflect.TypeOf(v)
 	if rv.Kind() != reflect.Ptr {

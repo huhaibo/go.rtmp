@@ -354,6 +354,9 @@ func NewAmf0(v interface {}) (*Amf0Any) {
 func NewAmf0Null() (*Amf0Any) {
 	return &Amf0Any{ Marker:AMF0_Null }
 }
+func NewAmf0Undefined() (*Amf0Any) {
+	return &Amf0Any{ Marker:AMF0_Undefined }
+}
 func (r *Amf0Any) Size() (int) {
 	switch {
 	case r.Marker == AMF0_String:

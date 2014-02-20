@@ -264,7 +264,7 @@ func (r *server) Handshake() (err error) {
 func (r *server) ConnectApp(req *Request) (err error) {
 	//var msg *Message
 	var pkt *ConnectAppPacket
-	if _, err = r.protocol.ExpectMessage(&pkt); err != nil {
+	if _, err = r.protocol.ExpectPacket(&pkt); err != nil {
 		return
 	}
 
@@ -341,7 +341,12 @@ func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (clie
 		if pkt, ok := pkt.(*CreateStreamPacket); ok {
 			return r.identify_create_stream_client(pkt, stream_id_generator)
 		}
-		// TODO: FIXME: implements it.
+		if pkt, ok := pkt.(*FMLEStartPacket); ok {
+			return r.identify_fmle_publish_client(pkt)
+		}
+		if pkt, ok := pkt.(*PlayPacket); ok {
+			return r.identify_play_client(pkt)
+		}
 	}
 	return
 }
@@ -383,6 +388,19 @@ func (r *server) identify_play_client(req *PlayPacket) (client_type string, stre
 func (r *server) identify_flash_publish_client(req *PublishPacket) (client_type string, stream_name string, err error) {
 	client_type = CLIENT_TYPE_FlashPublish
 	stream_name = req.StreamName
+	return
+}
+func (r *server) identify_fmle_publish_client(req *FMLEStartPacket) (client_type string, stream_name string, err error) {
+	client_type = CLIENT_TYPE_FMLEPublish
+	stream_name = req.StreamName
+
+	// releaseStream response
+	if (true) {
+		pkt := NewFMLEStartResPacket(req.TransactionId)
+		if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+			return
+		}
+	}
 	return
 }
 
@@ -449,5 +467,62 @@ func (r *server) StartFlashPublish(stream_id int) (err error) {
 
 func (r *server) StartFMLEPublish(stream_id int) (err error) {
 	// FCPublish
+	var fc_publish_tid float64
+	if true {
+		var pkt *FMLEStartPacket
+		if _, err = r.protocol.ExpectPacket(&pkt); err != nil {
+			return
+		}
+		fc_publish_tid = pkt.TransactionId
+	}
+	// FCPublish response
+	if (true) {
+		pkt := NewFMLEStartResPacket(fc_publish_tid)
+		if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+			return
+		}
+	}
+
+	// createStream
+	var create_stream_tid float64
+	if true {
+		var pkt *CreateStreamPacket
+		if _, err = r.protocol.ExpectPacket(&pkt); err != nil {
+			return
+		}
+		create_stream_tid = pkt.TransactionId
+	}
+	// createStream response
+	if true {
+		pkt := NewCreateStreamResPacket(create_stream_tid, float64(stream_id))
+		if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+			return
+		}
+	}
+
+	// publish
+	if true {
+		var pkt *PublishPacket
+		if _, err = r.protocol.ExpectPacket(&pkt); err != nil {
+			return
+		}
+	}
+	// publish response onFCPublish(NetStream.Publish.Start)
+	if true {
+		pkt := NewOnStatusCallPacket()
+		pkt.CommandName = AMF0_COMMAND_ON_FC_PUBLISH
+		pkt.Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.")
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
+	// publish response onStatus(NetStream.Publish.Start)
+	if true {
+		pkt := NewOnStatusCallPacket()
+		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.").Set(SCLIENT_ID, SIG_CLIENT_ID)
+		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+			return
+		}
+	}
 	return
 }

@@ -24,6 +24,7 @@ package rtmp
 import (
 	"net"
 	"fmt"
+	"time"
 )
 
 // socket to read or write data.
@@ -31,6 +32,9 @@ type Socket struct {
 	conn *net.TCPConn
 	recv_bytes uint64
 	send_bytes uint64
+	// the timeout for socket.
+	read_timeout_ms time.Duration
+	write_timeout_ms time.Duration
 }
 func NewSocket(conn *net.TCPConn) (*Socket) {
 	r := &Socket{}
@@ -46,8 +50,35 @@ func (r *Socket) SendBytes() (uint64) {
 	return r.send_bytes
 }
 
+func (r *Socket) SetReadTimeout(timeout_ms time.Duration) {
+	r.read_timeout_ms = timeout_ms
+}
+func (r *Socket) SetWriteTimeout(timeout_ms time.Duration) {
+	r.write_timeout_ms = timeout_ms
+}
+
 func (r *Socket) Read(b []byte) (n int, err error) {
-	n, err = r.conn.Read(b)
+	if r.read_timeout_ms >= 0 {
+		r.conn.SetReadDeadline(time.Now().Add(r.read_timeout_ms * time.Millisecond))
+	}
+
+	if n, err = r.conn.Read(b); err != nil {
+		return
+	}
+
+	if n == 0 {
+		if err == nil {
+			err = Error{code:ERROR_SOCKET_CLOSED, desc:"read peer closed gracefully"}
+		}
+		return
+	}
+
+	if n < 0 {
+		if err == nil {
+			err = Error{code:ERROR_SOCKET_READ, desc:"read data failed"}
+		}
+		return
+	}
 
 	if n > 0 {
 		r.recv_bytes += uint64(n)
@@ -58,6 +89,10 @@ func (r *Socket) Read(b []byte) (n int, err error) {
 
 func (r *Socket) Write(b []byte) (n int, err error) {
 	for n < len(b) {
+		if r.write_timeout_ms >= 0 {
+			r.conn.SetWriteDeadline(time.Now().Add(r.write_timeout_ms * time.Millisecond))
+		}
+
 		var nb_written int
 		if nb_written, err = r.conn.Write(b[n:]); err != nil {
 			return
@@ -65,7 +100,7 @@ func (r *Socket) Write(b []byte) (n int, err error) {
 
 		if nb_written == 0 {
 			if err == nil {
-				err = Error{code:ERROR_SOCKET_CLOSED, desc:"peer closed gracefully"}
+				err = Error{code:ERROR_SOCKET_CLOSED, desc:"write peer closed gracefully"}
 			}
 			return
 		}

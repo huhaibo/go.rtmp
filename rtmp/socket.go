@@ -57,14 +57,33 @@ func (r *Socket) Read(b []byte) (n int, err error) {
 }
 
 func (r *Socket) Write(b []byte) (n int, err error) {
-	n, err = r.conn.Write(b)
+	for n < len(b) {
+		var nb_written int
+		if nb_written, err = r.conn.Write(b[n:]); err != nil {
+			return
+		}
 
-	if n > 0 {
-		r.send_bytes += uint64(n)
-	}
+		if nb_written == 0 {
+			if err == nil {
+				err = Error{code:ERROR_SOCKET_CLOSED, desc:"peer closed gracefully"}
+			}
+			return
+		}
 
-	if n != len(b) {
-		err = Error{code:ERROR_GO_SOCKET_WRITE_PARTIAL, desc:fmt.Sprintf("write partial, expect=%v, actual=%v", len(b), n)}
+		if nb_written < 0 {
+			if err == nil {
+				err = Error{code:ERROR_SOCKET_WRITE, desc:"write data failed"}
+			}
+			return
+		}
+
+		r.send_bytes += uint64(nb_written)
+		n += nb_written
+
+		if n < len(b) {
+			// TODO: FIXME: remove following
+			fmt.Printf("write partially, len(b)=%v, n=%v, nb_written=%v\n", len(b), n, nb_written)
+		}
 	}
 
 	return

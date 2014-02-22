@@ -175,13 +175,6 @@ func (r *Request) discovery_app() (err error) {
 }
 
 /**
-* genereate the stream id, to response CreateStream() request.
- */
-type RtmpStreamIdGenerator interface {
-	StreamId() (n int)
-}
-
-/**
 * the rtmp server interface, user can create it by func NewServer().
  */
 type Server interface {
@@ -229,14 +222,15 @@ type Server interface {
 	* 		CLIENT_TYPE_Play the client is a play client, for example, the Flash play.
 	* 		CLIENT_TYPE_FMLEPublish the client is publish client use FMLE schema, for example, the adobe FMLE
 	* 		CLIENT_TYPE_FlashPublish the client is publish client use Flash schema, for example, the Flash publish.
+	* @param stream_id the stream id used to response the CreateStream() request
 	 */
-	IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error)
+	IdentifyClient(stream_id uint32) (client_type string, stream_name string, err error)
 	/**
 	* start the play/publish stream service engine
 	 */
-	StartPlay(stream_id int) (err error)
-	StartFlashPublish(stream_id int) (err error)
-	StartFMLEPublish(stream_id int) (err error)
+	StartPlay(stream_id uint32) (err error)
+	StartFlashPublish(stream_id uint32) (err error)
+	StartFMLEPublish(stream_id uint32) (err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -321,7 +315,7 @@ func (r *server) CallOnBWDone() (err error) {
 	return r.protocol.SendPacket(pkt, uint32(0))
 }
 
-func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error) {
+func (r *server) IdentifyClient(stream_id uint32) (client_type string, stream_name string, err error) {
 	client_type = CLIENT_TYPE_Unknown
 	for {
 		var msg *Message
@@ -339,7 +333,7 @@ func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (clie
 		}
 
 		if pkt, ok := pkt.(*CreateStreamPacket); ok {
-			return r.identify_create_stream_client(pkt, stream_id_generator)
+			return r.identify_create_stream_client(pkt, stream_id)
 		}
 		if pkt, ok := pkt.(*FMLEStartPacket); ok {
 			return r.identify_fmle_publish_client(pkt)
@@ -350,8 +344,8 @@ func (r *server) IdentifyClient(stream_id_generator RtmpStreamIdGenerator) (clie
 	}
 	return
 }
-func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_id_generator RtmpStreamIdGenerator) (client_type string, stream_name string, err error) {
-	pkt := NewCreateStreamResPacket(req.TransactionId, float64(stream_id_generator.StreamId()))
+func (r *server) identify_create_stream_client(req *CreateStreamPacket, stream_id uint32) (client_type string, stream_name string, err error) {
+	pkt := NewCreateStreamResPacket(req.TransactionId, float64(stream_id))
 	if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
 		return
 	}
@@ -404,10 +398,10 @@ func (r *server) identify_fmle_publish_client(req *FMLEStartPacket) (client_type
 	return
 }
 
-func (r *server) StartPlay(stream_id int) (err error) {
+func (r *server) StartPlay(stream_id uint32) (err error) {
 	// StreamBegin
 	if true {
-		pkt := &UserControlPacket{EventType:PCUCStreamBegin, EventData:uint32(stream_id)}
+		pkt := &UserControlPacket{EventType:PCUCStreamBegin, EventData:stream_id}
 		if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
 			return
 		}
@@ -418,7 +412,7 @@ func (r *server) StartPlay(stream_id int) (err error) {
 		pkt := NewOnStatusCallPacket()
 		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_StreamReset).Set(SDESC, "Playing and resetting stream.")
 		pkt.Set(SDETAILS, "stream").Set(SCLIENT_ID, SIG_CLIENT_ID)
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
@@ -428,7 +422,7 @@ func (r *server) StartPlay(stream_id int) (err error) {
 		pkt := NewOnStatusCallPacket()
 		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_StreamStart).Set(SDESC, "Started playing stream.")
 		pkt.Set(SDETAILS, "stream").Set(SCLIENT_ID, SIG_CLIENT_ID)
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
@@ -436,7 +430,7 @@ func (r *server) StartPlay(stream_id int) (err error) {
 	// |RtmpSampleAccess(false, false)
 	if true {
 		pkt := NewSampleAccessPacket()
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
@@ -445,27 +439,27 @@ func (r *server) StartPlay(stream_id int) (err error) {
 	if true {
 		pkt := NewOnStatusDataPacket()
 		pkt.Set(SCODE, SCODE_DataStart)
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (r *server) StartFlashPublish(stream_id int) (err error) {
+func (r *server) StartFlashPublish(stream_id uint32) (err error) {
 	// publish response onStatus(NetStream.Publish.Start)
 	if true {
 		pkt := NewOnStatusCallPacket()
 		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.")
 		pkt.Set(SCLIENT_ID, SIG_CLIENT_ID)
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
 	return
 }
 
-func (r *server) StartFMLEPublish(stream_id int) (err error) {
+func (r *server) StartFMLEPublish(stream_id uint32) (err error) {
 	// FCPublish
 	var fc_publish_tid float64
 	if true {
@@ -512,7 +506,7 @@ func (r *server) StartFMLEPublish(stream_id int) (err error) {
 		pkt := NewOnStatusCallPacket()
 		pkt.CommandName = AMF0_COMMAND_ON_FC_PUBLISH
 		pkt.Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.")
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}
@@ -520,7 +514,7 @@ func (r *server) StartFMLEPublish(stream_id int) (err error) {
 	if true {
 		pkt := NewOnStatusCallPacket()
 		pkt.Set(SLEVEL, SLEVEL_Status).Set(SCODE, SCODE_PublishStart).Set(SDESC, "Started publishing stream.").Set(SCLIENT_ID, SIG_CLIENT_ID)
-		if err = r.protocol.SendPacket(pkt, uint32(stream_id)); err != nil {
+		if err = r.protocol.SendPacket(pkt, stream_id); err != nil {
 			return
 		}
 	}

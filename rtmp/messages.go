@@ -69,6 +69,18 @@ func NewMessage() (*Message) {
 	return r
 }
 
+// copy the message, deep copy header and field, share copy the payload
+func (r *Message) Copy() (*Message) {
+	copy := &Message{}
+	copy_header := *r.Header
+	copy.Header = &copy_header
+	copy.Payload = r.Payload
+	copy.ReceivedPayloadLength = r.ReceivedPayloadLength
+	copy.PerferCid = r.PerferCid
+	copy.SentPayloadLength = r.SentPayloadLength
+	return copy
+}
+
 /**
 * incoming chunk stream maybe interlaced,
 * use the chunk stream to cache the input RTMP chunk streams.

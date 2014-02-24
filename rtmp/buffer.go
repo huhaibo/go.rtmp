@@ -22,7 +22,6 @@
 package rtmp
 
 import (
-	"encoding/binary"
 	"math"
 )
 
@@ -104,135 +103,82 @@ func (r *Buffer) Skip(n int){
 
 // Read reads the next len(p) bytes from the buffer or until the buffer
 // is drained.
-func (r *Buffer) Read(p []byte) (v []byte) {
-	if _, err := r.buffer.Read(p); err != nil {
+func (r *Buffer) Read(n int) (b []byte) {
+	b = r.buffer.Bytes()
+	b = b[0:n]
+
+	if err := r.buffer.Skip(n); err != nil {
 		panic(err)
 	}
-
-	return p
+	return
 }
 
 // ReadByte reads and returns the next byte from the buffer.
 func (r* Buffer) ReadByte() (v byte) {
-	bytes := r.buffer.Bytes()
+	b := r.buffer.Bytes()
+	v = b[0]
+
 	if err := r.buffer.Skip(1); err != nil {
 		panic(err)
 	}
-	v = bytes[0]
 	return v
 }
 
 // ReadByte reads and returns the next 3 bytes from the buffer. in big-endian
 func (r* Buffer) ReadUInt24() (v uint32) {
-	b := make([]byte, 4)
-	if _, err := r.buffer.Read(b[1:]); err != nil {
+	b := r.buffer.Bytes()
+	v = uint32(b[2]) | uint32(b[1])<<8 | uint32(b[0])<<16
+	//v = v & 0x00FFFFFF
+
+	if err := r.buffer.Skip(3); err != nil {
 		panic(err)
 	}
-
-	return binary.BigEndian.Uint32(b)
+	return v
 }
 
 func (r* Buffer) ReadUInt16() (v uint16) {
-	b := make([]byte, 2)
-	if _, err := r.buffer.Read(b); err != nil {
+	b := r.buffer.Bytes()
+	v = uint16(b[1]) | uint16(b[0])<<8
+
+	if err := r.buffer.Skip(2); err != nil {
 		panic(err)
 	}
-
-	return binary.BigEndian.Uint16(b)
+	return v
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
 func (r* Buffer) ReadUInt32() (v uint32) {
-	b := make([]byte, 4)
-	if _, err := r.buffer.Read(b); err != nil {
+	b := r.buffer.Bytes()
+	v = uint32(b[3]) | uint32(b[2])<<8 | uint32(b[1])<<16 | uint32(b[0])<<24
+
+	if err := r.buffer.Skip(4); err != nil {
 		panic(err)
 	}
-
-	return binary.BigEndian.Uint32(b)
+	return v
 }
 
 // ReadByte reads and returns the next 8 bytes from the buffer. in big-endian
 func (r* Buffer) ReadFloat64() (v float64) {
-	b := make([]byte, 8)
-	if _, err := r.buffer.Read(b); err != nil {
-		panic(err)
-	}
-
-	v64 := binary.BigEndian.Uint64(b)
+	b := r.buffer.Bytes()
+	v64 := uint64(b[7]) | uint64(b[6])<<8 | uint64(b[5])<<16 | uint64(b[4])<<24 |
+		uint64(b[3])<<32 | uint64(b[2])<<40 | uint64(b[1])<<48 | uint64(b[0])<<56
 	v = math.Float64frombits(v64)
 
-	return
+	if err := r.buffer.Skip(8); err != nil {
+		panic(err)
+	}
+	return v
 }
 
 // ReadByte reads and returns the next 4 bytes from the buffer. in little-endian
 func (r* Buffer) ReadUInt32Le() (v uint32) {
-	b := make([]byte, 4)
-	if _, err := r.buffer.Read(b); err != nil {
+	b := r.buffer.Bytes()
+	v = uint32(b[0]) | uint32(b[1])<<8 | uint32(b[2])<<16 | uint32(b[3])<<24
+
+	if err := r.buffer.Skip(4); err != nil {
 		panic(err)
 	}
-
-	return binary.LittleEndian.Uint32(b)
-}
-
-// read string length specified by n.
-func (r *Buffer) ReadString(n int) (v string) {
-	b := make([]byte, n)
-	if _, err := r.buffer.Read(b); err != nil {
-		panic(err)
-	}
-
-	return string(b)
-}
-
-// ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
-func (r *Buffer) WriteUInt32(v uint32) (*Buffer) {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, v)
-
-	if _, err := r.buffer.Write(b); err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func (r *Buffer) WriteUInt24(v uint32) (*Buffer) {
-	b := make([]byte, 4)
-	binary.BigEndian.PutUint32(b, v)
-	if _, err := r.buffer.Write(b[1:]); err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func (r *Buffer) WriteUInt16(v uint16) (*Buffer) {
-	b := make([]byte, 2)
-	binary.BigEndian.PutUint16(b, v)
-	if _, err := r.buffer.Write(b); err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func (r *Buffer) WriteUInt32Le(v uint32) (*Buffer) {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, v)
-	if _, err := r.buffer.Write(b); err != nil {
-		panic(err)
-	}
-
-	return r
-}
-
-func (r *Buffer) WriteByte(v byte) (*Buffer) {
-	bytes := r.buffer.Bytes()
-	if err := r.buffer.Skip(1); err != nil {
-		panic(err)
-	}
-	bytes[0] = v
-	return r
+	return v
 }
 
 func (r *Buffer) Write(v []byte) (*Buffer) {
@@ -243,12 +189,81 @@ func (r *Buffer) Write(v []byte) (*Buffer) {
 	return r
 }
 
-func (r *Buffer) WriteFloat64(v float64) (*Buffer) {
-	b := make([]byte, 8)
-	binary.BigEndian.PutUint64(b, math.Float64bits(v))
-	if _, err := r.buffer.Write(b); err != nil {
+func (r *Buffer) WriteByte(v byte) (*Buffer) {
+	b := r.buffer.Bytes()
+	b[0] = v
+
+	if err := r.buffer.Skip(1); err != nil {
 		panic(err)
 	}
+	return r
+}
 
+// ReadByte reads and returns the next 4 bytes from the buffer. in big-endian
+func (r *Buffer) WriteUInt32(v uint32) (*Buffer) {
+	b := r.buffer.Bytes()
+	b[0] = byte(v >> 24)
+	b[1] = byte(v >> 16)
+	b[2] = byte(v >> 8)
+	b[3] = byte(v)
+
+	if err := r.buffer.Skip(4); err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func (r *Buffer) WriteUInt24(v uint32) (*Buffer) {
+	b := r.buffer.Bytes()
+	b[0] = byte(v >> 16)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v)
+
+	if err := r.buffer.Skip(3); err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func (r *Buffer) WriteUInt16(v uint16) (*Buffer) {
+	b := r.buffer.Bytes()
+	b[0] = byte(v >> 8)
+	b[1] = byte(v)
+
+	if err := r.buffer.Skip(2); err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func (r *Buffer) WriteUInt32Le(v uint32) (*Buffer) {
+	b := r.buffer.Bytes()
+	b[0] = byte(v)
+	b[1] = byte(v >> 8)
+	b[2] = byte(v >> 16)
+	b[3] = byte(v >> 24)
+
+	if err := r.buffer.Skip(4); err != nil {
+		panic(err)
+	}
+	return r
+}
+
+func (r *Buffer) WriteFloat64(v64 float64) (*Buffer) {
+	v := math.Float64bits(v64)
+
+	b := r.buffer.Bytes()
+	b[0] = byte(v >> 56)
+	b[1] = byte(v >> 48)
+	b[2] = byte(v >> 40)
+	b[3] = byte(v >> 32)
+	b[4] = byte(v >> 24)
+	b[5] = byte(v >> 16)
+	b[6] = byte(v >> 8)
+	b[7] = byte(v)
+
+	if err := r.buffer.Skip(8); err != nil {
+		panic(err)
+	}
 	return r
 }

@@ -568,7 +568,7 @@ func (r *Amf0Codec) ReadUtf8() (v string, err error) {
 		err = Error{code:ERROR_RTMP_AMF0_DECODE, desc:"amf0 utf8 data requires more bytes"}
 		return
 	}
-	v = r.stream.ReadString(int(len))
+	v = string(r.stream.Read(int(len)))
 
 	// support utf8-1 only
 	// 1.3.1 Strings and UTF-8

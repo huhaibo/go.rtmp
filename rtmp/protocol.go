@@ -571,7 +571,7 @@ func (r *protocol) read_message_payload(chunk *ChunkStream, bh_size int, mh_size
 	if err = r.buffer.EnsureBufferBytes(payload_size); err != nil {
 		return
 	}
-	r.buffer.Read(chunk.Msg.Payload[chunk.Msg.ReceivedPayloadLength:chunk.Msg.ReceivedPayloadLength+payload_size])
+	copy(chunk.Msg.Payload[chunk.Msg.ReceivedPayloadLength:chunk.Msg.ReceivedPayloadLength+payload_size], r.buffer.Read(payload_size))
 	chunk.Msg.ReceivedPayloadLength += payload_size
 	if err = r.buffer.Consume(mh_size + bh_size + payload_size); err != nil {
 		return

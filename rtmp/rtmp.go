@@ -231,6 +231,11 @@ type Server interface {
 	StartPlay(stream_id uint32) (err error)
 	StartFlashPublish(stream_id uint32) (err error)
 	StartFMLEPublish(stream_id uint32) (err error)
+	/**
+	* send a ping request to client.
+	* @param timestamp the timestamp in seconds. for example, uint32(time.Now().Unix())
+	 */
+	Ping(timestamp uint32) (err error)
 }
 func NewServer(conn *net.TCPConn) (Server, error) {
 	var err error
@@ -518,5 +523,18 @@ func (r *server) StartFMLEPublish(stream_id uint32) (err error) {
 			return
 		}
 	}
+	return
+}
+
+func (r *server) Ping(timestamp uint32) (err error) {
+	// ping client
+	pkt := NewUserControlPacket()
+	pkt.EventType = PCUCPingRequest
+	pkt.EventData = uint32(timestamp)
+
+	if err = r.protocol.SendPacket(pkt, uint32(0)); err != nil {
+		return
+	}
+
 	return
 }

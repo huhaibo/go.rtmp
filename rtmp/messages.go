@@ -1037,13 +1037,13 @@ func (r *PublishPacket) Encode(s *Buffer) (err error) {
 // @see: SrcPCUCEventType
 const(
 	// generally, 4bytes event-data
-	PCUCStreamBegin = iota
-	PCUCStreamEOF
-	PCUCStreamDry
-	PCUCSetBufferLength // 8bytes event-data
-	PCUCStreamIsRecorded
-	PCUCPingRequest
-	PCUCPingResponse
+	PCUCStreamBegin = 0
+	PCUCStreamEOF = 1
+	PCUCStreamDry = 2
+	PCUCSetBufferLength = 3// 8bytes event-data
+	PCUCStreamIsRecorded = 4
+	PCUCPingRequest = 6
+	PCUCPingResponse = 7
 )
 /**
 * for the EventData is 4bytes.

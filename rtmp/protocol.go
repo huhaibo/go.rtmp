@@ -54,10 +54,6 @@ func (r *protocol) RecvMessage() (msg *Message, err error) {
 			return
 		}
 
-		if err = r.buffer.Truncate(); err != nil {
-			return
-		}
-
 		if msg == nil {
 			continue
 		}
@@ -328,10 +324,10 @@ func (r *protocol) HistoryRequestName(transaction_id float64) (request_name stri
 
 func (r *protocol) recv_interlaced_message() (msg *Message, err error) {
 	var format byte
-	var cid int
+	var bh_size, mh_size, cid int
 
 	// chunk stream basic header.
-	if format, cid, _, err = r.read_basic_header(); err != nil {
+	if format, cid, bh_size, err = r.read_basic_header(); err != nil {
 		return
 	}
 
@@ -343,12 +339,12 @@ func (r *protocol) recv_interlaced_message() (msg *Message, err error) {
 	}
 
 	// chunk stream message header
-	if _, err = r.read_message_header(chunk, format); err != nil {
+	if mh_size, err = r.read_message_header(chunk, format); err != nil {
 		return
 	}
 
 	// read msg payload from chunk stream.
-	if msg, err = r.read_message_payload(chunk); err != nil {
+	if msg, err = r.read_message_payload(chunk, bh_size, mh_size); err != nil {
 		return
 	}
 
@@ -553,11 +549,12 @@ func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size
 	return
 }
 
-func (r *protocol) read_message_payload(chunk *ChunkStream) (msg *Message, err error) {
+func (r *protocol) read_message_payload(chunk *ChunkStream, bh_size int, mh_size int) (msg *Message, err error) {
 	// empty message
 	if int32(chunk.Header.PayloadLength) <= 0 {
 		msg = chunk.Msg
 		chunk.Msg = nil
+		err = r.buffer.Consume(mh_size + bh_size)
 		return
 	}
 
@@ -576,6 +573,9 @@ func (r *protocol) read_message_payload(chunk *ChunkStream) (msg *Message, err e
 	}
 	r.buffer.Read(chunk.Msg.Payload[chunk.Msg.ReceivedPayloadLength:chunk.Msg.ReceivedPayloadLength+payload_size])
 	chunk.Msg.ReceivedPayloadLength += payload_size
+	if err = r.buffer.Consume(mh_size + bh_size + payload_size); err != nil {
+		return
+	}
 
 	// got entire RTMP message?
 	if chunk.Msg.ReceivedPayloadLength == len(chunk.Msg.Payload) {

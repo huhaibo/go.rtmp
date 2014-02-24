@@ -68,8 +68,8 @@ func (r *Buffer) EnsureBufferBytes(n int) (err error) {
 	return
 }
 
-func (r *Buffer) Truncate() (err error) {
-	return r.buffer.Truncate()
+func (r *Buffer) Consume(n int) (err error) {
+	return r.buffer.Consume(n)
 }
 
 // whether stream can satisfy the requires n bytes.
@@ -111,12 +111,8 @@ func (r *Buffer) Read(p []byte) (v []byte) {
 
 // ReadByte reads and returns the next byte from the buffer.
 func (r* Buffer) ReadByte() (v byte) {
-	var err error
-
-	if v, err = r.buffer.ReadByte(); err != nil {
-		panic(err)
-	}
-
+	bytes :=r.buffer.Next(1)
+	v = bytes[0]
 	return v
 }
 
@@ -225,10 +221,8 @@ func (r *Buffer) WriteUInt32Le(v uint32) (*Buffer) {
 }
 
 func (r *Buffer) WriteByte(v byte) (*Buffer) {
-	if err := r.buffer.WriteByte(v); err != nil {
-		panic(err)
-	}
-
+	bytes := r.buffer.Next(1)
+	bytes[0] = v
 	return r
 }
 

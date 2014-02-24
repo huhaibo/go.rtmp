@@ -24,7 +24,6 @@ package rtmp
 /**
 * high performance bytes buffer, read and write from zero.
  */
-const HPBufferMaxSize = 1024 * 1024
 type HPBuffer struct {
 	buf []byte
 	off int
@@ -34,7 +33,6 @@ func NewHPBuffer(b []byte) (*HPBuffer) {
 	r.buf = b
 	return r
 }
-func (r *HPBuffer) Bytes() []byte { return r.buf[r.off:] }
 func (r *HPBuffer) String() string {
 	if r == nil {
 		return "<nil>"
@@ -45,21 +43,13 @@ func (r *HPBuffer) Reset() { r.off = 0 }
 func (r *HPBuffer) Len() (int) { return len(r.buf) - r.off }
 func (r *HPBuffer) Append(b []byte) (n int, err error) {
 	// TODO: FIXME: return err
-	n = len(b)
 	r.buf = append(r.buf, b...)
 	return
 }
-func (r *HPBuffer) Truncate() (err error) {
+func (r *HPBuffer) Consume(n int) (err error) {
 	// TODO: FIXME: return err
-	r.buf = r.buf[r.off:len(r.buf)]
+	r.buf = r.buf[r.off:]
 	r.off = 0
-
-	// shrink if too large
-	if cap(r.buf) - len(r.buf) > HPBufferMaxSize {
-		v := make([]byte, len(r.buf))
-		copy(v, r.buf)
-		r.buf = v
-	}
 	return
 }
 func (r *HPBuffer) Next(n int) (b []byte) {
@@ -71,6 +61,7 @@ func (r *HPBuffer) Next(n int) (b []byte) {
 	r.off += n
 	return
 }
+func (r *HPBuffer) Bytes() []byte { return r.buf[r.off:] }
 func (r *HPBuffer) Read(b []byte) (n int, err error) {
 	// TODO: FIXME: return err
 	n = len(b)
@@ -78,22 +69,10 @@ func (r *HPBuffer) Read(b []byte) (n int, err error) {
 	r.off += n
 	return
 }
-func (r *HPBuffer) ReadByte() (v byte, err error) {
-	// TODO: FIXME: return err
-	v = r.buf[r.off]
-	r.off += 1
-	return
-}
 func (r *HPBuffer) Write(b []byte) (n int, err error) {
 	// TODO: FIXME: return err
 	n = len(b)
 	copy(r.buf[r.off:r.off+n], b)
 	r.off += n
-	return
-}
-func (r *HPBuffer) WriteByte(b byte) (err error) {
-	// TODO: FIXME: return err
-	r.buf[r.off] = b
-	r.off += 1
 	return
 }

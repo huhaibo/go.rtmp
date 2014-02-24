@@ -35,7 +35,7 @@ type Buffer struct{
 func NewRtmpBuffer(conn *Socket) (*Buffer) {
 	r := &Buffer{}
 	r.conn = conn
-	r.buffer = &HPBuffer{}
+	r.buffer = NewHPBuffer(nil)
 	return r
 }
 func NewRtmpStream(b []byte) (*Buffer) {

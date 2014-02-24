@@ -24,6 +24,8 @@ package rtmp
 import (
 	"math"
 	"reflect"
+	"sync"
+	"runtime"
 )
 
 /**
@@ -49,22 +51,6 @@ func (r *AckWindowSize) ShouldAckRead(n uint64) (bool) {
 
 	return n - uint64(r.acked_size) > uint64(r.ack_window_size)
 }
-
-/**
-* max rtmp header size:
-* 	1bytes basic header,
-* 	11bytes message header,
-* 	4bytes timestamp header,
-* that is, 1+11+4=16bytes.
-*/
-const RTMP_MAX_FMT0_HEADER_SIZE = 16
-/**
-* max rtmp header size:
-* 	1bytes basic header,
-* 	4bytes timestamp header,
-* that is, 1+4=5bytes.
-*/
-const RTMP_MAX_FMT3_HEADER_SIZE = 5
 
 /**
 * the protocol provides the rtmp-message-protocol services,
@@ -99,6 +85,183 @@ type protocol struct {
 	outHeaderFmt0 *Buffer
 	// bytes cache, size is RTMP_MAX_FMT3_HEADER_SIZE
 	outHeaderFmt3 *Buffer
+	// use channel to store the decoded message, or messages to encode,
+	// for user can use select to determinate the event of message(incoming or outgoing)
+	// message channel lock, to stop protocol
+	msg_in_lock *sync.Mutex
+	msg_out_lock *sync.Mutex
+	// input/output error
+	msg_io_err error
+	// message input queue, received message from connection.
+	msg_in_queue chan *Message
+	// message output queue, message to send over connection
+	msg_out_queue chan *Message
+}
+
+/**
+* destroy the protocol stack, close channels, stop goroutines.
+ */
+func (r *protocol) Destroy() {
+	r.msg_in_lock.Lock()
+	r.msg_out_lock.Lock()
+	defer r.msg_out_lock.Unlock()
+	defer r.msg_in_lock.Unlock()
+
+	if r.msg_io_err == nil {
+		r.msg_io_err = Error{code:ERROR_GO_PROTOCOL_DESTROYED, desc:"protocol stack destroyed"}
+	}
+
+	close(r.msg_in_queue)
+	close(r.msg_out_queue)
+}
+
+/**
+* start pump messages, input/output goroutines:
+* recv message from connection and put into msg_in_queue
+* send messages in msg_out_queue over connection
+ */
+func (r *protocol) start_message_pump_goroutines() {
+	go r.recv_msg_goroutine()
+	go r.send_msg_goroutine()
+}
+func (r *protocol) recv_msg_goroutine() {
+	for r.msg_io_err == nil {
+		r.do_recv_msg_goroutine()
+	}
+}
+func (r *protocol) send_msg_goroutine() {
+	for r.msg_io_err == nil {
+		r.do_send_msg_goroutine()
+	}
+}
+func (r *protocol) do_recv_msg_goroutine() {
+	r.msg_in_lock.Lock()
+	defer r.msg_in_lock.Unlock()
+
+	if r.msg_io_err != nil {
+		return
+	}
+
+	r.msg_io_err = r.do_recv_msg_goroutine_job()
+}
+func (r *protocol) do_send_msg_goroutine() {
+	r.msg_out_lock.Lock()
+	defer r.msg_out_lock.Unlock()
+
+	if r.msg_io_err != nil {
+		return
+	}
+
+	r.msg_io_err = r.do_send_msg_goroutine_job()
+}
+func (r *protocol) do_recv_msg_goroutine_job() (err error) {
+	var msg *Message
+
+	if msg, err = r.recv_interlaced_message(); err != nil {
+		return
+	}
+
+	if msg == nil {
+		return
+	}
+
+	if msg.ReceivedPayloadLength <= 0 || msg.Header.PayloadLength <= 0 {
+		return
+	}
+
+	if err = r.on_recv_message(msg); err != nil {
+		return
+	}
+
+	r.msg_in_queue <- msg
+	return
+}
+func (r *protocol) do_send_msg_goroutine_job() (err error) {
+	var msg *Message
+	var ok bool
+	if msg, ok = <- r.msg_out_queue; !ok {
+		err = Error{code:ERROR_GO_PROTOCOL_DESTROYED, desc:"protocol stack destroyed, cannot send"}
+		return
+	}
+
+	// always write the header event payload is empty.
+	msg.SentPayloadLength = -1
+	for len(msg.Payload) > msg.SentPayloadLength {
+		msg.SentPayloadLength = int(math.Max(0, float64(msg.SentPayloadLength)))
+
+		// generate the header.
+		var real_header []byte
+
+		if msg.SentPayloadLength <= 0 {
+			// write new chunk stream header, fmt is 0
+			var pheader *Buffer = r.outHeaderFmt0.Reset()
+			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
+
+			// chunk message header, 11 bytes
+			// timestamp, 3bytes, big-endian
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt24(uint32(0xFFFFFF))
+			} else {
+				pheader.WriteUInt24(uint32(msg.Header.Timestamp))
+			}
+
+			// message_length, 3bytes, big-endian
+			// message_type, 1bytes
+			// message_length, 3bytes, little-endian
+			pheader.WriteUInt24(msg.Header.PayloadLength).WriteByte(msg.Header.MessageType).WriteUInt32Le(msg.Header.StreamId)
+
+			// chunk extended timestamp header, 0 or 4 bytes, big-endian
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
+			}
+
+			real_header = r.outHeaderFmt0.WrittenBytes()
+		} else {
+			// write no message header chunk stream, fmt is 3
+			var pheader *Buffer = r.outHeaderFmt3.Reset()
+			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
+
+			// chunk extended timestamp header, 0 or 4 bytes, big-endian
+			// 6.1.3. Extended Timestamp
+			// This field is transmitted only when the normal time stamp in the
+			// chunk message header is set to 0x00ffffff. If normal time stamp is
+			// set to any value less than 0x00ffffff, this field MUST NOT be
+			// present. This field MUST NOT be present if the timestamp field is not
+			// present. Type 3 chunks MUST NOT have this field.
+			// adobe changed for Type3 chunk:
+			//		FMLE always sendout the extended-timestamp,
+			// 		must send the extended-timestamp to FMS,
+			//		must send the extended-timestamp to flash-player.
+			// @see: ngx_rtmp_prepare_message
+			// @see: http://blog.csdn.net/win_lin/article/details/13363699
+			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
+				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
+			}
+
+			real_header = r.outHeaderFmt3.WrittenBytes()
+		}
+
+		// sendout header
+		if _, err = r.conn.Write(real_header); err != nil {
+			return
+		}
+
+		// sendout payload
+		if len(msg.Payload) > 0 {
+			payload_size := len(msg.Payload) - msg.SentPayloadLength
+			payload_size = int(math.Min(float64(r.outChunkSize), float64(payload_size)))
+
+			data := msg.Payload[msg.SentPayloadLength:msg.SentPayloadLength+payload_size]
+			if _, err = r.conn.Write(data); err != nil {
+				return
+			}
+
+			// consume sendout bytes when not empty packet.
+			msg.SentPayloadLength += payload_size
+		}
+	}
+
+	return
 }
 
 /**
@@ -107,25 +270,17 @@ type protocol struct {
 * specifies message.
 */
 func (r *protocol) RecvMessage() (msg *Message, err error) {
-	for {
-		if msg, err = r.recv_interlaced_message(); err != nil {
-			return
-		}
-
-		if msg == nil {
-			continue
-		}
-
-		if msg.ReceivedPayloadLength <= 0 || msg.Header.PayloadLength <= 0 {
-			continue
-		}
-
-		if err = r.on_recv_message(msg); err != nil {
-			return
-		}
-
-		break
+	var ok bool
+	if msg, ok = <- r.msg_in_queue; ok {
+		return
 	}
+
+	if r.msg_io_err != nil {
+		err = r.msg_io_err
+		return
+	}
+
+	err = Error{code:ERROR_GO_PROTOCOL_DESTROYED, desc:"recv msg from destroyed stack"}
 	return
 }
 
@@ -246,83 +401,20 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 		msg.Header.StreamId = stream_id
 	}
 
-	// always write the header event payload is empty.
-	msg.SentPayloadLength = -1
-	for len(msg.Payload) > msg.SentPayloadLength {
-		msg.SentPayloadLength = int(math.Max(0, float64(msg.SentPayloadLength)))
-
-		// generate the header.
-		var real_header []byte
-
-		if msg.SentPayloadLength <= 0 {
-			// write new chunk stream header, fmt is 0
-			var pheader *Buffer = r.outHeaderFmt0.Reset()
-			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
-
-			// chunk message header, 11 bytes
-			// timestamp, 3bytes, big-endian
-			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
-				pheader.WriteUInt24(uint32(0xFFFFFF))
-			} else {
-				pheader.WriteUInt24(uint32(msg.Header.Timestamp))
-			}
-
-			// message_length, 3bytes, big-endian
-			// message_type, 1bytes
-			// message_length, 3bytes, little-endian
-			pheader.WriteUInt24(msg.Header.PayloadLength).WriteByte(msg.Header.MessageType).WriteUInt32Le(msg.Header.StreamId)
-
-			// chunk extended timestamp header, 0 or 4 bytes, big-endian
-			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
-				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
-			}
-
-			real_header = r.outHeaderFmt0.WrittenBytes()
-		} else {
-			// write no message header chunk stream, fmt is 3
-			var pheader *Buffer = r.outHeaderFmt3.Reset()
-			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
-
-			// chunk extended timestamp header, 0 or 4 bytes, big-endian
-			// 6.1.3. Extended Timestamp
-			// This field is transmitted only when the normal time stamp in the
-			// chunk message header is set to 0x00ffffff. If normal time stamp is
-			// set to any value less than 0x00ffffff, this field MUST NOT be
-			// present. This field MUST NOT be present if the timestamp field is not
-			// present. Type 3 chunks MUST NOT have this field.
-			// adobe changed for Type3 chunk:
-			//		FMLE always sendout the extended-timestamp,
-			// 		must send the extended-timestamp to FMS,
-			//		must send the extended-timestamp to flash-player.
-			// @see: ngx_rtmp_prepare_message
-			// @see: http://blog.csdn.net/win_lin/article/details/13363699
-			if msg.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP {
-				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
-			}
-
-			real_header = r.outHeaderFmt3.WrittenBytes()
-		}
-
-		// sendout header
-		if _, err = r.conn.Write(real_header); err != nil {
-			return
-		}
-
-		// sendout payload
-		if len(msg.Payload) > 0 {
-			payload_size := len(msg.Payload) - msg.SentPayloadLength
-			payload_size = int(math.Min(float64(r.outChunkSize), float64(payload_size)))
-
-			data := msg.Payload[msg.SentPayloadLength:msg.SentPayloadLength+payload_size]
-			if _, err = r.conn.Write(data); err != nil {
+	defer func(){
+		if re := recover(); re != nil {
+			if _, ok := re.(runtime.Error); ok {
+				// write to closed channel
+				if err == nil {
+					err = r.msg_io_err
+				}
 				return
 			}
-
-			// consume sendout bytes when not empty packet.
-			msg.SentPayloadLength += payload_size
+			panic(re)
 		}
-	}
+	}()
 
+	r.msg_out_queue <- msg
 	return
 }
 

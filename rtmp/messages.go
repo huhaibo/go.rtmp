@@ -27,6 +27,7 @@ import (
 	"time"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 /**
@@ -161,8 +162,13 @@ type MessageHeader struct {
 
 type Protocol interface {
 	/**
+	* destroy the protocol stack, close channels, stop goroutines.
+	 */
+	Destroy()
+	/**
 	* do simple handshake with client, user can try simple/complex interlace,
 	* that is, try complex handshake first, use simple if complex handshake failed.
+	* when handshake success, start the message input/outout goroutines
 	 */
 	SimpleHandshake2Client() (err error)
 	/**
@@ -198,6 +204,23 @@ type Protocol interface {
 	SendMessage(pkt *Message, stream_id uint32) (err error)
 }
 /**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	11bytes message header,
+* 	4bytes timestamp header,
+* that is, 1+11+4=16bytes.
+*/
+const RTMP_MAX_FMT0_HEADER_SIZE = 16
+/**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	4bytes timestamp header,
+* that is, 1+4=5bytes.
+*/
+const RTMP_MAX_FMT3_HEADER_SIZE = 5
+// the buffer size of msg channel
+const RTMP_MSG_CHANNEL_BUFFER = 100
+/**
 * create the rtmp protocol.
  */
 func NewProtocol(conn *net.TCPConn) (Protocol, error) {
@@ -212,6 +235,11 @@ func NewProtocol(conn *net.TCPConn) (Protocol, error) {
 	r.outChunkSize = r.inChunkSize
 	r.outHeaderFmt0 = NewRtmpStream(make([]byte, RTMP_MAX_FMT0_HEADER_SIZE))
 	r.outHeaderFmt3 = NewRtmpStream(make([]byte, RTMP_MAX_FMT3_HEADER_SIZE))
+
+	r.msg_in_lock = &sync.Mutex{}
+	r.msg_out_lock = &sync.Mutex{}
+	r.msg_in_queue = make(chan *Message, RTMP_MSG_CHANNEL_BUFFER)
+	r.msg_out_queue = make(chan *Message, RTMP_MSG_CHANNEL_BUFFER)
 
 	rand.Seed(time.Now().UnixNano())
 

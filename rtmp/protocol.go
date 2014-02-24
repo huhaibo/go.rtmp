@@ -24,7 +24,6 @@ package rtmp
 import (
 	"math"
 	"reflect"
-	"time"
 )
 
 // should ack the read, ack to peer
@@ -34,13 +33,6 @@ func (r *AckWindowSize) ShouldAckRead(n uint64) (bool) {
 	}
 
 	return n - uint64(r.acked_size) > uint64(r.ack_window_size)
-}
-
-func (r *protocol) SetReadTimeout(timeout_ms time.Duration) {
-	r.conn.SetReadTimeout(timeout_ms)
-}
-func (r *protocol) SetWriteTimeout(timeout_ms time.Duration) {
-	r.conn.SetWriteTimeout(timeout_ms)
 }
 
 /**

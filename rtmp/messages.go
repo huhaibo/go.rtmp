@@ -192,12 +192,6 @@ const RTMP_MAX_FMT3_HEADER_SIZE = 5
 
 type Protocol interface {
 	/**
-	* set the read/write timeout by param timeout_ms
-	* @param timeout_ms the timeout in ms, 0 to never timeout.
-	 */
-	SetReadTimeout(timeout_ms time.Duration)
-	SetWriteTimeout(timeout_ms time.Duration)
-	/**
 	* do simple handshake with client, user can try simple/complex interlace,
 	* that is, try complex handshake first, use simple if complex handshake failed.
 	 */

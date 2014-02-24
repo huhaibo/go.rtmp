@@ -114,6 +114,10 @@ func (r *HPBuffer) Bytes() []byte {
 	b := r.buffer.Bytes()
 	return b[r.off:]
 }
+func (r *HPBuffer) WrittenBytes() ([]byte) {
+	b := r.buffer.Bytes()
+	return b[0:r.off]
+}
 func (r *HPBuffer) Append(b []byte) (n int, err error) {
 	r.buffer.Append(b)
 

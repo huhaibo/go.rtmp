@@ -247,8 +247,8 @@ func NewProtocol(conn *net.TCPConn) (Protocol, error) {
 
 	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
 	r.outChunkSize = r.inChunkSize
-	r.outHeaderFmt0 = make([]byte, RTMP_MAX_FMT0_HEADER_SIZE)
-	r.outHeaderFmt3 = make([]byte, RTMP_MAX_FMT3_HEADER_SIZE)
+	r.outHeaderFmt0 = NewRtmpStream(make([]byte, RTMP_MAX_FMT0_HEADER_SIZE))
+	r.outHeaderFmt3 = NewRtmpStream(make([]byte, RTMP_MAX_FMT3_HEADER_SIZE))
 
 	rand.Seed(time.Now().UnixNano())
 
@@ -285,9 +285,9 @@ type protocol struct {
 	// output chunk stream chunk size.
 	outChunkSize uint32
 	// bytes cache, size is RTMP_MAX_FMT0_HEADER_SIZE
-	outHeaderFmt0 []byte
+	outHeaderFmt0 *Buffer
 	// bytes cache, size is RTMP_MAX_FMT3_HEADER_SIZE
-	outHeaderFmt3 []byte
+	outHeaderFmt3 *Buffer
 }
 
 /**

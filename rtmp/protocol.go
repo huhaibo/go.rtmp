@@ -198,7 +198,7 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 
 		if msg.SentPayloadLength <= 0 {
 			// write new chunk stream header, fmt is 0
-			var pheader *Buffer = NewRtmpStream(r.outHeaderFmt0)
+			var pheader *Buffer = r.outHeaderFmt0.Reset()
 			pheader.WriteByte(0x00 | byte(msg.PerferCid & 0x3F))
 
 			// chunk message header, 11 bytes
@@ -219,10 +219,10 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
 			}
 
-			real_header = r.outHeaderFmt0[0:len(r.outHeaderFmt0) - pheader.Left()]
+			real_header = r.outHeaderFmt0.WrittenBytes()
 		} else {
 			// write no message header chunk stream, fmt is 3
-			var pheader *Buffer = NewRtmpStream(r.outHeaderFmt3)
+			var pheader *Buffer = r.outHeaderFmt3.Reset()
 			pheader.WriteByte(0xC0 | byte(msg.PerferCid & 0x3F))
 
 			// chunk extended timestamp header, 0 or 4 bytes, big-endian
@@ -242,7 +242,7 @@ func (r *protocol) SendMessage(pkt *Message, stream_id uint32) (err error) {
 				pheader.WriteUInt32(uint32(msg.Header.Timestamp))
 			}
 
-			real_header = r.outHeaderFmt3[0:len(r.outHeaderFmt3) - pheader.Left()]
+			real_header = r.outHeaderFmt3.WrittenBytes()
 		}
 
 		// sendout header

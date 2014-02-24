@@ -52,13 +52,9 @@ func (r *HPBuffer) Consume(n int) (err error) {
 	r.off = 0
 	return
 }
-func (r *HPBuffer) Next(n int) (b []byte) {
-	if n > 0 {
-		b = r.buf[r.off:r.off+n]
-	} else {
-		b = r.buf[r.off+n:r.off]
-	}
+func (r *HPBuffer) Skip(n int) (err error) {
 	r.off += n
+	// TODO: FIXME: return err
 	return
 }
 func (r *HPBuffer) Bytes() []byte { return r.buf[r.off:] }

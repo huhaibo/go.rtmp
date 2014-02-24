@@ -95,8 +95,11 @@ func (r *Buffer) Left() (int) {
 // advancing the buffer as if the bytes had been returned by Read.
 // If there are fewer than n bytes in the buffer, Next returns the entire buffer.
 // The slice is only valid until the next call to a read or write method.
-func (r *Buffer) Next(n int) ([]byte){
-	return r.buffer.Next(n)
+func (r *Buffer) Skip(n int){
+	if err := r.buffer.Skip(n); err != nil {
+		panic(err)
+	}
+	return
 }
 
 // Read reads the next len(p) bytes from the buffer or until the buffer
@@ -111,7 +114,10 @@ func (r *Buffer) Read(p []byte) (v []byte) {
 
 // ReadByte reads and returns the next byte from the buffer.
 func (r* Buffer) ReadByte() (v byte) {
-	bytes :=r.buffer.Next(1)
+	bytes := r.buffer.Bytes()
+	if err := r.buffer.Skip(1); err != nil {
+		panic(err)
+	}
 	v = bytes[0]
 	return v
 }
@@ -221,7 +227,10 @@ func (r *Buffer) WriteUInt32Le(v uint32) (*Buffer) {
 }
 
 func (r *Buffer) WriteByte(v byte) (*Buffer) {
-	bytes := r.buffer.Next(1)
+	bytes := r.buffer.Bytes()
+	if err := r.buffer.Skip(1); err != nil {
+		panic(err)
+	}
 	bytes[0] = v
 	return r
 }

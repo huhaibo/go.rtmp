@@ -414,7 +414,7 @@ func (r *Amf0Any) Read(codec *Amf0Codec) (err error) {
 		return
 	}
 	r.Marker = codec.stream.ReadByte()
-	codec.stream.Next(-1)
+	codec.stream.Skip(-1)
 
 	switch {
 	case r.Marker == AMF0_String:

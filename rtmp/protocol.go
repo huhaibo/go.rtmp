@@ -527,7 +527,7 @@ func (r *protocol) read_message_header(chunk *ChunkStream, format byte) (mh_size
 		// type 0,1 or 2.
 		if chunk.Header.Timestamp > RTMP_EXTENDED_TIMESTAMP && chunk.Header.Timestamp != uint64(timestamp) {
 			mh_size -= 4
-			r.buffer.Next(-4)
+			r.buffer.Skip(-4)
 		} else {
 			chunk.Header.Timestamp = uint64(timestamp)
 		}

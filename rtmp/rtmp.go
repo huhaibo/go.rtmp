@@ -179,10 +179,6 @@ func (r *Request) discovery_app() (err error) {
  */
 type Server interface {
 	/**
-	* destroy the server stack.
-	 */
-	Destroy()
-	/**
 	* get the underlayer protocol stack sdk.
 	 */
 	Protocol() (Protocol)
@@ -252,10 +248,6 @@ func NewServer(conn *net.TCPConn) (Server, error) {
 
 type server struct {
 	protocol Protocol
-}
-
-func (r *server) Destroy() {
-	r.protocol.Destroy()
 }
 
 func (r *server) Protocol() (Protocol) {

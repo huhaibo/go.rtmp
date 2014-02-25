@@ -96,5 +96,8 @@ func (r *protocol) SimpleHandshake2Client() (err error) {
 		return
 	}
 
+	// start messages input/outout goroutines
+	r.start_message_pump_goroutines()
+
 	return
 }

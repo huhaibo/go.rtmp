@@ -27,6 +27,7 @@ import (
 	"time"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 /**
@@ -159,47 +160,21 @@ type MessageHeader struct {
 	Timestamp uint64
 }
 
-/**
-* the handshake data, 6146B = 6KB,
-* store in the protocol and never delete it for every connection.
- */
-type Handshake struct {
-	c0c1 []byte // 1537B
-	s0s1s2 []byte // 3073B
-	c2 []byte // 1536B
-}
-
-type AckWindowSize struct {
-	ack_window_size uint32
-	acked_size uint64
-}
-
-/**
-* max rtmp header size:
-* 	1bytes basic header,
-* 	11bytes message header,
-* 	4bytes timestamp header,
-* that is, 1+11+4=16bytes.
-*/
-const RTMP_MAX_FMT0_HEADER_SIZE = 16
-/**
-* max rtmp header size:
-* 	1bytes basic header,
-* 	4bytes timestamp header,
-* that is, 1+4=5bytes.
-*/
-const RTMP_MAX_FMT3_HEADER_SIZE = 5
-
 type Protocol interface {
 	/**
-	* set the read/write timeout by param timeout_ms
-	* @param timeout_ms the timeout in ms, 0 to never timeout.
+	* destroy the protocol stack, close channels, stop goroutines.
 	 */
-	SetReadTimeout(timeout_ms time.Duration)
-	SetWriteTimeout(timeout_ms time.Duration)
+	Destroy()
+	/**
+	* get the message input channel,
+	* the input goroutine decode and put message into the input channel,
+	* where user can select the channel to recv message.
+	 */
+	MessageInputChannel() (chan *Message)
 	/**
 	* do simple handshake with client, user can try simple/complex interlace,
 	* that is, try complex handshake first, use simple if complex handshake failed.
+	* when handshake success, start the message input/outout goroutines
 	 */
 	SimpleHandshake2Client() (err error)
 	/**
@@ -235,6 +210,23 @@ type Protocol interface {
 	SendMessage(pkt *Message, stream_id uint32) (err error)
 }
 /**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	11bytes message header,
+* 	4bytes timestamp header,
+* that is, 1+11+4=16bytes.
+*/
+const RTMP_MAX_FMT0_HEADER_SIZE = 16
+/**
+* max rtmp header size:
+* 	1bytes basic header,
+* 	4bytes timestamp header,
+* that is, 1+4=5bytes.
+*/
+const RTMP_MAX_FMT3_HEADER_SIZE = 5
+// the buffer size of msg channel
+const RTMP_MSG_CHANNEL_BUFFER = 100
+/**
 * create the rtmp protocol.
  */
 func NewProtocol(conn *net.TCPConn) (Protocol, error) {
@@ -247,47 +239,17 @@ func NewProtocol(conn *net.TCPConn) (Protocol, error) {
 
 	r.inChunkSize = RTMP_DEFAULT_CHUNK_SIZE
 	r.outChunkSize = r.inChunkSize
-	r.outHeaderFmt0 = make([]byte, RTMP_MAX_FMT0_HEADER_SIZE)
-	r.outHeaderFmt3 = make([]byte, RTMP_MAX_FMT3_HEADER_SIZE)
+	r.outHeaderFmt0 = NewRtmpStream(make([]byte, RTMP_MAX_FMT0_HEADER_SIZE))
+	r.outHeaderFmt3 = NewRtmpStream(make([]byte, RTMP_MAX_FMT3_HEADER_SIZE))
+
+	r.msg_in_lock = &sync.Mutex{}
+	r.msg_out_lock = &sync.Mutex{}
+	r.msg_in_queue = make(chan *Message, RTMP_MSG_CHANNEL_BUFFER)
+	r.msg_out_queue = make(chan *Message, RTMP_MSG_CHANNEL_BUFFER)
 
 	rand.Seed(time.Now().UnixNano())
 
 	return r, nil
-}
-
-/**
-* the protocol provides the rtmp-message-protocol services,
-* to recv RTMP message from RTMP chunk stream,
-* and to send out RTMP message over RTMP chunk stream.
-*/
-type protocol struct {
-// handshake
-	handshake *Handshake
-// peer in/out
-	// the underlayer tcp connection, to read/write bytes from/to.
-	conn *Socket
-	/**
-	* requests sent out, used to build the response.
-	* key: a float64 indicates the transactionId
-	* value: a string indicates the request command name
-	*/
-	requests map[float64]string
-// peer in
-	chunkStreams map[int]*ChunkStream
-	// the bytes read from underlayer tcp connection,
-	// used for parse to RTMP message or packets.
-	buffer *Buffer
-	// input chunk stream chunk size.
-	inChunkSize uint32
-	// the acked size
-	inAckSize AckWindowSize
-// peer out
-	// output chunk stream chunk size.
-	outChunkSize uint32
-	// bytes cache, size is RTMP_MAX_FMT0_HEADER_SIZE
-	outHeaderFmt0 []byte
-	// bytes cache, size is RTMP_MAX_FMT3_HEADER_SIZE
-	outHeaderFmt3 []byte
 }
 
 /**

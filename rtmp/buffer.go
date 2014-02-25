@@ -25,17 +25,23 @@ import (
 	"math"
 )
 
+// rtmp socket recv buffer
+const RTMP_SOCKET_READ_SIZE = 16*1024
+
 // read data from socket if needed.
 type Buffer struct{
 	// high performance buffer, to read/write from zero.
 	buf *HPBuffer
 	// to read bytes and append to buffer.
 	conn *Socket
+	// the 4k socket read buffer
+	skt_buf []byte
 }
 func NewRtmpBuffer(conn *Socket) (*Buffer) {
 	r := &Buffer{}
 	r.conn = conn
 	r.buf = NewHPBuffer(nil)
+	r.skt_buf = make([]byte, RTMP_SOCKET_READ_SIZE)
 	return r
 }
 func NewRtmpStream(b []byte) (*Buffer) {
@@ -44,22 +50,19 @@ func NewRtmpStream(b []byte) (*Buffer) {
 	return r
 }
 
-const RTMP_SOCKET_READ_SIZE = 4096
-
 /**
 * ensure the buffer contains n bytes, append from connection if needed.
  */
 func (r *Buffer) EnsureBufferBytes(n int) (err error) {
 	var buffer *HPBuffer = r.buf
 
-	buf := make([]byte, RTMP_SOCKET_READ_SIZE)
 	for buffer.Len() < n {
 		var nsize int
-		if nsize, err = r.conn.Read(buf); err != nil {
+		if nsize, err = r.conn.Read(r.skt_buf); err != nil {
 			return
 		}
 
-		if _, err = buffer.Append(buf[0:nsize]); err != nil {
+		if _, err = buffer.Append(r.skt_buf[0:nsize]); err != nil {
 			return
 		}
 	}
@@ -82,12 +85,17 @@ func (r *Buffer) Empty() (bool) {
 }
 
 // reset the decode buffer, start from index n
-func (r *Buffer) Reset() {
+func (r *Buffer) Reset() (*Buffer) {
 	r.buf.Reset()
+	return r
 }
 
 func (r *Buffer) Left() (int) {
 	return r.buf.Len()
+}
+
+func (r *Buffer) WrittenBytes() ([]byte) {
+	return r.buf.WrittenBytes()
 }
 
 // Next returns a slice containing the next n bytes from the buffer,

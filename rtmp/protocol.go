@@ -115,6 +115,10 @@ func (r *protocol) Destroy() {
 	close(r.msg_out_queue)
 }
 
+func (r *protocol) MessageInputChannel() (chan *Message) {
+	return r.msg_in_queue
+}
+
 /**
 * start pump messages, input/output goroutines:
 * recv message from connection and put into msg_in_queue

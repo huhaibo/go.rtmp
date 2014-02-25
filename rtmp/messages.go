@@ -166,6 +166,12 @@ type Protocol interface {
 	 */
 	Destroy()
 	/**
+	* get the message input channel,
+	* the input goroutine decode and put message into the input channel,
+	* where user can select the channel to recv message.
+	 */
+	MessageInputChannel() (chan *Message)
+	/**
 	* do simple handshake with client, user can try simple/complex interlace,
 	* that is, try complex handshake first, use simple if complex handshake failed.
 	* when handshake success, start the message input/outout goroutines
